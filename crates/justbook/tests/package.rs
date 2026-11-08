@@ -34,6 +34,7 @@ fn manifest(id: &str) -> Manifest {
             sha256: "ab".into(),
             converter_version: "1".into(),
         },
+        fixed: None,
     }
 }
 
@@ -96,4 +97,41 @@ fn newer_schema_is_rejected() {
         load_manifest(root.path()),
         Err(Error::UnsupportedSchema { .. })
     ));
+}
+
+#[test]
+fn fixed_layout_packages_validate() {
+    // STEP 1: an image-based (comic) package with two pages.
+    let root = tempfile::tempdir().unwrap();
+    let dest = root.path().join("comic");
+    let mut w = JustBookWriter::create(&dest).unwrap();
+    w.write_file("pages/p0001.png", b"x").unwrap();
+    w.write_file("pages/p0002.png", b"x").unwrap();
+    let mut m = manifest("id-4");
+    m.layout = Layout::Fixed;
+    m.spine.clear();
+    m.toc.clear();
+    let page = |h: &str| FixedPage {
+        href: h.into(),
+        width: 100,
+        height: 150,
+    };
+    m.fixed = Some(FixedContent {
+        kind: FixedKind::Images,
+        page_count: 2,
+        document: None,
+        pages: vec![page("pages/p0001.png"), page("pages/p0002.png")],
+        right_to_left: false,
+    });
+    w.finish(&m).unwrap();
+    assert_eq!(load_manifest(&dest).unwrap().fixed.unwrap().pages.len(), 2);
+
+    // STEP 2: a fixed manifest pointing at a missing page is rejected.
+    let dest2 = root.path().join("broken");
+    let w2 = JustBookWriter::create(&dest2).unwrap();
+    assert!(w2
+        .finish(&m)
+        .unwrap_err()
+        .to_string()
+        .contains("page missing"));
 }

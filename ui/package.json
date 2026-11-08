@@ -4,15 +4,17 @@
   "license": "Apache-2.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
+    "dev": "node scripts/copy-pdfjs.mjs && vite",
+    "build": "node scripts/copy-pdfjs.mjs && vite build",
     "preview": "vite preview",
     "check": "svelte-check --tsconfig ./tsconfig.json",
-    "test": "vitest run"
+    "test": "vitest run",
+    "assets": "node scripts/copy-pdfjs.mjs"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.12.4",
-    "@tauri-apps/plugin-dialog": "^2.8.4"
+    "@tauri-apps/plugin-dialog": "^2.8.4",
+    "pdfjs-dist": "^6.5.438"
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^7.3.1",

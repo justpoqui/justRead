@@ -14,18 +14,21 @@ import { buildSrcdoc } from "./chapter-doc";
 import { locatorAt, locatorsOfRange, rangeBetween, snapToWords } from "./dom-locator";
 import type { FrameHooks } from "./frame";
 import { clearAll, paintHighlight } from "./highlights";
-import { compareLocators, locateProgression, parseLocator, type FlowLocator } from "./locator";
+import { compareLocators, locateProgression, parseLocator, type FlowLocator, type Locator } from "./locator";
 import { PaginatedView } from "./paginated";
 import { ScrolledView } from "./scrolled";
 import type { View, ViewContext, VisibleRange } from "./view";
 
 export interface RelocateEvent {
-  range: VisibleRange;
+  /** Visible text range (reflowable books only). */
+  range: VisibleRange | null;
+  /** Visible page indices (fixed-layout books only). */
+  visiblePages: number[] | null;
   /**
    * The reading position to persist and restore. It stays fixed while it is
    * still on screen, so switching layouts back and forth never drifts.
    */
-  anchor: FlowLocator;
+  anchor: Locator;
   /** 0..1 through the whole book. */
   progression: number;
   spine: number;
@@ -49,10 +52,31 @@ export interface EngineEvents {
   externalLink: string;
   key: KeyboardEvent;
   center: void;
+  /** Ctrl/⌘ + wheel or pinch on a fixed-layout page: multiply zoom by this. */
+  zoom: number;
   error: Error;
 }
 
 type Listener<T> = (v: T) => void;
+
+/** What the reader screen needs from either engine (reflowable or fixed). */
+export interface Engine {
+  on<K extends keyof EngineEvents>(name: K, cb: (v: EngineEvents[K]) => void): () => void;
+  open(start?: string | null): Promise<void>;
+  destroy(): void;
+  setSettings(next: ReaderSettings): Promise<void>;
+  next(): Promise<unknown>;
+  prev(): Promise<unknown>;
+  goToLocator(text: string): Promise<void>;
+  goToHref(href: string): Promise<void>;
+  goToFraction(fraction: number): Promise<void>;
+  setAnnotations(list: Annotation[]): void;
+  clearSelection(): void;
+  /** Table of contents discovered at runtime (PDF outline); null = use the manifest's. */
+  toc(): Promise<import("../ipc/types").TocEntry[] | null>;
+  /** Pages run right-to-left (manga): arrow keys and taps are mirrored. */
+  readonly rtl: boolean;
+}
 
 export interface EngineOptions {
   host: HTMLElement;
@@ -63,7 +87,9 @@ export interface EngineOptions {
   contentBase: string;
 }
 
-export class ReaderEngine {
+export class ReaderEngine implements Engine {
+  readonly rtl = false;
+
   private view: View | null = null;
   private settings: ReaderSettings;
   private cache = new Map<number, string>();
@@ -206,6 +232,10 @@ export class ReaderEngine {
     return this.goTo(locateProgression(this.opts.manifest.spine, fraction));
   }
 
+  async toc() {
+    return null;
+  }
+
   /** The current visible range (top-of-page locator and exclusive end). */
   visibleRange(): VisibleRange | null {
     return this.view?.visibleRange() ?? null;
@@ -307,7 +337,7 @@ export class ReaderEngine {
     const before = spine.slice(0, idx).reduce((s, x) => s + x.chars, 0);
     const progression = Math.min(1, (before + (spine[idx]?.chars ?? 0) * view.chapterFraction()) / total);
     const { page, pages } = view.pageInfo();
-    return { range, anchor, progression, spine: idx, chapterTitle: spine[idx]?.title ?? null, page, pages };
+    return { range, visiblePages: null, anchor, progression, spine: idx, chapterTitle: spine[idx]?.title ?? null, page, pages };
   }
 }
 

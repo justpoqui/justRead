@@ -10,9 +10,12 @@
   import NoteEditor from "../components/NoteEditor.svelte";
   import { api, packageUrl } from "../lib/ipc/api";
   import type { Annotation, OpenedBook } from "../lib/ipc/types";
-  import { ReaderEngine, type RelocateEvent, type SelectionEvent } from "../lib/reader/engine";
+  import { ReaderEngine, type Engine, type RelocateEvent, type SelectionEvent } from "../lib/reader/engine";
   import { formatLocator } from "../lib/reader/locator";
-  import { bookmarksInRange } from "../lib/reader/bookmarks";
+  import { bookmarksInRange, bookmarksOnPages } from "../lib/reader/bookmarks";
+  import { FixedEngine } from "../lib/fixed/fixed-engine";
+  import { ImageSource, PdfSource } from "../lib/fixed/sources";
+  import type { TocEntry } from "../lib/ipc/types";
   import { settings, saveSettings } from "../lib/settings/store.svelte";
   import { toast } from "../lib/stores/toasts.svelte";
 
@@ -20,7 +23,10 @@
 
   let host = $state<HTMLDivElement | undefined>();
   let book = $state<OpenedBook | null>(null);
-  let engine: ReaderEngine | null = null;
+  // $state.raw: the engine object itself is not made deeply reactive.
+  let engine = $state.raw<Engine | null>(null);
+  let toc = $state<TocEntry[]>([]);
+  const fixed = $derived(book?.manifest.layout === "fixed");
   let where = $state<RelocateEvent | null>(null);
   let annotations = $state<Annotation[]>([]);
   let panel = $state<"toc" | "notes" | "settings" | null>(null);
@@ -31,8 +37,12 @@
   let scrub = $state<number | null>(null);
 
   const title = $derived(book?.book.title ?? "");
-  const currentHref = $derived(where && book ? book.manifest.spine[where.spine]?.href ?? null : null);
-  const pageBookmarks = $derived(bookmarksInRange(annotations, where?.range ?? null));
+  const currentHref = $derived(
+    where && book ? (fixed ? `page:${where.page - 1}` : book.manifest.spine[where.spine]?.href ?? null) : null,
+  );
+  const pageBookmarks = $derived(
+    fixed ? bookmarksOnPages(annotations, where?.visiblePages ?? null) : bookmarksInRange(annotations, where?.range ?? null),
+  );
 
   // STEP 1: open the book, then create the engine at the saved position.
   onMount(() => {
@@ -46,13 +56,25 @@
         void getCurrentWindow().setTitle(`${book.book.title} — justRead`);
         if (disposed || !host) return;
 
-        engine = new ReaderEngine({
-          host,
-          manifest: book.manifest,
-          settings: $state.snapshot(settings),
-          loadChapter: (href) => api.readChapter(id, href),
-          contentBase: packageUrl(id, "content/"),
-        });
+        // STEP 1b: reflowable books use the text engine, PDFs and comics the page engine.
+        const m = book.manifest;
+        const snap = $state.snapshot(settings);
+        if (m.layout === "fixed" && m.fixed) {
+          const source =
+            m.fixed.kind === "pdf"
+              ? await PdfSource.open(packageUrl(id, m.fixed.document!))
+              : new ImageSource(m, (href) => packageUrl(id, href));
+          if (disposed) return source.destroy();
+          engine = new FixedEngine(host, m, source, snap);
+        } else {
+          engine = new ReaderEngine({
+            host,
+            manifest: m,
+            settings: snap,
+            loadChapter: (href) => api.readChapter(id, href),
+            contentBase: packageUrl(id, "content/"),
+          });
+        }
         engine.setAnnotations($state.snapshot(annotations));
 
         // STEP 2: wire engine events to UI state.
@@ -77,9 +99,14 @@
         });
         engine.on("key", onKey);
         engine.on("center", () => (chrome = !chrome));
+        engine.on("zoom", (f) => {
+          settings.zoom = Math.min(5, Math.max(0.5, Math.round(settings.zoom * f * 100) / 100));
+          saveSettings();
+        });
         engine.on("error", (e) => toast(e.message, "error"));
 
         await engine.open(book.progress?.locator);
+        toc = (await engine.toc()) ?? m.toc;
       } catch (e) {
         toast(String(e), "error", 8000);
         onclose();
@@ -106,7 +133,19 @@
     if (editing) return;
     const t = e.target as HTMLElement | null;
     if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT")) return;
-    switch (e.key) {
+    // Right-to-left books (manga) mirror the arrow keys.
+    const key = engine?.rtl && (e.key === "ArrowLeft" || e.key === "ArrowRight") ? (e.key === "ArrowLeft" ? "ArrowRight" : "ArrowLeft") : e.key;
+    switch (key) {
+      case "+":
+      case "=":
+        if (fixed) ((settings.zoom = Math.min(5, Math.round(settings.zoom * 110) / 100)), saveSettings());
+        break;
+      case "-":
+        if (fixed) ((settings.zoom = Math.max(0.5, Math.round(settings.zoom * 91) / 100)), saveSettings());
+        break;
+      case "0":
+        if (fixed) ((settings.zoom = 1), saveSettings());
+        break;
       case "ArrowRight":
       case "PageDown":
         e.preventDefault();
@@ -205,6 +244,12 @@
 
   async function toggleBookmark() {
     if (!where || !book) return;
+    if (fixed) {
+      if (pageBookmarks.length) for (const b of pageBookmarks) await api.deleteAnnotation(b.id);
+      else await api.addAnnotation({ bookId: id, kind: "bookmark", start: formatLocator(where.anchor), quote: `Page ${where.page}` });
+      await refreshAnnotations();
+      return;
+    }
     if (pageBookmarks.length) {
       for (const b of pageBookmarks) await api.deleteAnnotation(b.id);
     } else {
@@ -213,7 +258,7 @@
       await api.addAnnotation({
         bookId: id,
         kind: "bookmark",
-        start: formatLocator(where.range.start),
+        start: formatLocator(where.range!.start),
         quote: snippet,
         chapter: where.chapterTitle,
       });
@@ -223,7 +268,7 @@
 
   async function snippetAt(): Promise<string> {
     // The first ~120 characters of the visible text.
-    const r = engine?.visibleRange();
+    const r = where?.range;
     if (!r) return "";
     const frame = host?.querySelector("iframe");
     const doc = frame?.contentDocument;
@@ -242,6 +287,13 @@
     engine?.clearSelection();
   }
 
+  // "Pages 4–5 of 8" when a fixed-layout spread shows two pages.
+  const pageLabel = $derived.by(() => {
+    if (!where) return "";
+    const v = where.visiblePages;
+    if (fixed && settings.flow === "paginated" && v && v.length > 1) return `Pages ${v[0]! + 1}–${v[v.length - 1]! + 1} of ${where.pages}`;
+    return `Page ${where.page} of ${where.pages}`;
+  });
   const pct = $derived(Math.round((scrub ?? where?.progression ?? 0) * 100));
 </script>
 
@@ -268,24 +320,28 @@
 
   <div class="stage">
     {#if settings.flow === "paginated"}
-      <button class="edge left" title="Previous page" onclick={() => engine?.prev()}><Icon name="left" /></button>
+      <button class="edge left" title={engine?.rtl ? "Next page" : "Previous page"} onclick={() => (engine?.rtl ? engine?.next() : engine?.prev())}><Icon name="left" /></button>
     {/if}
     <div class="host" bind:this={host}></div>
     {#if settings.flow === "paginated"}
-      <button class="edge right" title="Next page" onclick={() => engine?.next()}><Icon name="right" /></button>
+      <button class="edge right" title={engine?.rtl ? "Previous page" : "Next page"} onclick={() => (engine?.rtl ? engine?.prev() : engine?.next())}><Icon name="right" /></button>
     {/if}
 
     {#if panel}
       <aside class="side" aria-label={panel}>
         {#if panel === "toc" && book}
           <h2>Contents</h2>
-          <TocPanel entries={book.manifest.toc} current={currentHref} onselect={(h) => ((panel = null), engine?.goToHref(h))} />
+          {#if toc.length}
+            <TocPanel entries={toc} current={currentHref} onselect={(h) => ((panel = null), engine?.goToHref(h))} />
+          {:else}
+            <p class="none">This book has no table of contents.</p>
+          {/if}
         {:else if panel === "notes"}
           <h2>Annotations</h2>
           <AnnotationsPanel {annotations} onselect={jumpTo} onedit={editNote} ondelete={removeAnnotation} />
         {:else if panel === "settings"}
           <h2>Reading settings</h2>
-          <SettingsPanel />
+          <SettingsPanel {fixed} />
         {/if}
       </aside>
     {/if}
@@ -307,7 +363,7 @@
       }}
     />
     <span class="pos">
-      {#if where && where.pages > 0}<span>Page {where.page} of {where.pages}</span><span class="dot">·</span>{/if}<span>{pct}%</span>
+      {#if where && where.pages > 0}<span>{pageLabel}</span><span class="dot">·</span>{/if}<span>{pct}%</span>
     </span>
   </footer>
 
@@ -401,6 +457,10 @@
     border-left: 1px solid var(--border);
     box-shadow: -12px 0 32px rgba(0, 0, 0, 0.12);
     z-index: 10;
+  }
+  .none {
+    color: var(--muted);
+    padding: 0 18px;
   }
   .side h2 {
     font-size: 15px;

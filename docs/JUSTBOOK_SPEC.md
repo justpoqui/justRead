@@ -20,17 +20,34 @@ All keys are camelCase.
 |---|---|---|
 | `schemaVersion` | int | `1`. Readers reject newer versions. |
 | `id` | string | UUID v4 = library primary key = directory name |
-| `layout` | `"reflowable"` \| `"fixed"` | Phase 1–2 produce `reflowable` only |
+| `layout` | `"reflowable"` \| `"fixed"` | EPUB/TXT → reflowable; PDF/comics → fixed |
 | `metadata` | object | `title` (required), `authors[]`, `language`, `publisher`, `description`, `published`, `series`, `seriesIndex`, `identifiers[]` |
 | `spine[]` | array | `{ href, title, chars, blocks, linear }` |
 | `toc[]` | tree | `{ title, href?, children? }`; `href` = `content/cNNNN.xhtml[#fragment]` |
 | `resources[]` | array | `{ href, mediaType }` |
 | `cover` | string? | package path |
 | `source` | object | `{ format, fileName, sha256, converterVersion }` |
+| `fixed` | object? | fixed-layout books only, see below |
 
 * `chars` = text length of the chapter in **UTF-16 code units** (same unit as DOM string offsets).
 * `blocks` = number of `data-jrb` ids in the chapter, including `<body>` (block 0).
 * All paths are relative, `/`-separated, normalized, and never contain `..`.
+
+## Fixed-layout section (schema v1, optional)
+
+```json
+"fixed": {
+  "kind": "pdf" | "images",
+  "pageCount": 8,
+  "document": "content/book.pdf",          // kind = pdf
+  "pages": [{ "href": "pages/00001.png", "width": 240, "height": 360 }],   // kind = images, reading order
+  "rightToLeft": false                      // manga
+}
+```
+
+For fixed books `spine` is empty; TOC targets use `page:<n>` (0-based). Page sizes of `0×0` mean
+"unknown" (the reader then assumes a 2:3 portrait page until the image loads). PDF and comic packages
+do not contain `original/`: the PDF and every page image are stored unchanged.
 
 ## Chapter documents
 

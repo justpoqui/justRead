@@ -139,6 +139,12 @@ pub fn read_chapter(
     std::fs::read_to_string(path).map_err(msg)
 }
 
+/// Store a cover rendered by the UI (PDFs carry no cover image).
+#[tauri::command]
+pub fn set_cover(state: State<'_, AppState>, book_id: String, bytes: Vec<u8>) -> CmdResult<String> {
+    state.lib().set_cover(&book_id, &bytes).map_err(msg)
+}
+
 #[tauri::command]
 pub fn save_progress(
     state: State<'_, AppState>,

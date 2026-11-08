@@ -40,6 +40,15 @@ export interface Manifest {
   resources: { href: string; mediaType: string }[];
   cover: string | null;
   source: { format: string; fileName: string; sha256: string; converterVersion: string };
+  fixed?: FixedContent | null;
+}
+
+export interface FixedContent {
+  kind: "pdf" | "images";
+  pageCount: number;
+  document?: string | null;
+  pages: { href: string; width: number; height: number }[];
+  rightToLeft: boolean;
 }
 
 export interface BookSummary {

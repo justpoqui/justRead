@@ -14,7 +14,7 @@ use std::fs::File;
 use std::io::Read;
 use std::path::Path;
 
-use justbook::{JustBookWriter, Layout, Manifest, SourceInfo, SCHEMA_VERSION};
+use justbook::{JustBookWriter, Manifest, SourceInfo, SCHEMA_VERSION};
 use justread_formats::{Registry, CONVERTER_VERSION};
 use rusqlite::{params, OptionalExtension};
 use serde::Serialize;
@@ -63,16 +63,19 @@ impl Library {
         let mut writer = JustBookWriter::create(&dest)?;
         let content = adapter.convert(src, &mut writer)?;
 
-        // STEP 4: keep the untouched original for future re-conversion.
+        // STEP 4: keep the untouched original for future re-conversion, unless the
+        // package already holds it losslessly (PDFs, comic pages).
         let file_name = safe_file_name(src);
-        let original = std::fs::read(src)?;
-        writer.write_file(&format!("original/{file_name}"), &original)?;
+        let file_size = std::fs::metadata(src)?.len();
+        if content.keep_original {
+            writer.write_file(&format!("original/{file_name}"), &std::fs::read(src)?)?;
+        }
 
         // STEP 5: final manifest; `finish` validates and renames atomically.
         let manifest = Manifest {
             schema_version: SCHEMA_VERSION,
             id: id.clone(),
-            layout: Layout::Reflowable,
+            layout: content.layout,
             metadata: content.metadata,
             spine: content.spine,
             toc: content.toc,
@@ -84,11 +87,12 @@ impl Library {
                 sha256: sha256.clone(),
                 converter_version: CONVERTER_VERSION.to_string(),
             },
+            fixed: content.fixed,
         };
         writer.finish(&manifest)?;
 
         // STEP 6: database row; roll the package back if this fails.
-        if let Err(e) = self.insert_book(&manifest, original.len() as u64) {
+        if let Err(e) = self.insert_book(&manifest, file_size) {
             let _ = std::fs::remove_dir_all(&dest);
             return Err(e);
         }

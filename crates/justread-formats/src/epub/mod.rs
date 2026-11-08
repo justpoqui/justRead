@@ -14,7 +14,6 @@
 //! 7. normalize each spine document into a justBook chapter;
 //! 8. copy the cover.
 
-pub mod archive;
 pub mod drm;
 pub mod fonts;
 pub mod opf;
@@ -25,8 +24,8 @@ use std::path::Path;
 
 use justbook::{JustBookWriter, Resource, SpineItem, TocEntry};
 
-use self::archive::SafeArchive;
 use self::opf::Package;
+use crate::archive::SafeArchive;
 use crate::html::{normalize, LinkContext};
 use crate::{
     css, decode_text, BookContent, Confidence, DrmStatus, FormatAdapter, FormatError, FormatFamily,
@@ -62,7 +61,7 @@ impl FormatAdapter for EpubAdapter {
     }
 
     fn inspect(&self, src: &Path) -> Result<Inspection> {
-        let mut ar = SafeArchive::open(src)?;
+        let mut ar = SafeArchive::open(src, "EPUB")?;
         let enc = drm::examine(&mut ar);
         let pkg = read_package(&mut ar)?;
         Ok(Inspection {
@@ -73,7 +72,7 @@ impl FormatAdapter for EpubAdapter {
 
     fn convert(&self, src: &Path, out: &mut JustBookWriter) -> Result<BookContent> {
         // STEP 1: open with limits.
-        let mut ar = SafeArchive::open(src)?;
+        let mut ar = SafeArchive::open(src, "EPUB")?;
         let mut warnings = Vec::new();
 
         // STEP 2: DRM — stop immediately, never try to work around it.
@@ -160,6 +159,9 @@ impl FormatAdapter for EpubAdapter {
         let cover = copy_cover(&mut ar, &pkg, out);
 
         Ok(BookContent {
+            layout: justbook::Layout::Reflowable,
+            fixed: None,
+            keep_original: true,
             metadata,
             spine,
             toc,

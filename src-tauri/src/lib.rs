@@ -36,6 +36,7 @@ pub fn run() {
             commands::open_book,
             commands::read_chapter,
             commands::save_progress,
+            commands::set_cover,
             commands::get_setting,
             commands::set_setting,
             commands::list_annotations,

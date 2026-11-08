@@ -138,6 +138,39 @@ impl Library {
         Ok(())
     }
 
+    /// Store a cover image for a book that has none yet (PDF covers are
+    /// rendered by the UI from page 1). Only PNG/JPEG/WebP are accepted.
+    pub fn set_cover(&self, book_id: &str, bytes: &[u8]) -> Result<String> {
+        // STEP 1: validate type and size — this comes from the webview.
+        let ext = if bytes.starts_with(b"\x89PNG") {
+            "png"
+        } else if bytes.starts_with(&[0xFF, 0xD8]) {
+            "jpg"
+        } else if bytes.len() > 12 && &bytes[0..4] == b"RIFF" && &bytes[8..12] == b"WEBP" {
+            "webp"
+        } else {
+            return Err(LibraryError::Invalid(
+                "cover must be PNG, JPEG or WebP".into(),
+            ));
+        };
+        if bytes.len() > 8 * 1024 * 1024 {
+            return Err(LibraryError::Invalid("cover image is too large".into()));
+        }
+
+        // STEP 2: write the file and update manifest + row.
+        let dir = self.package_dir(book_id)?;
+        let mut manifest = justbook::load_manifest(&dir)?;
+        let href = format!("cover.{ext}");
+        std::fs::write(dir.join(&href), bytes)?;
+        manifest.cover = Some(href.clone());
+        justbook::update_manifest(&dir, &manifest)?;
+        self.conn.execute(
+            "UPDATE books SET cover = ?2 WHERE id = ?1",
+            params![book_id, href],
+        )?;
+        Ok(href)
+    }
+
     /// Record that a book was opened (drives "recently read").
     pub fn mark_opened(&self, book_id: &str) -> Result<()> {
         self.conn.execute(

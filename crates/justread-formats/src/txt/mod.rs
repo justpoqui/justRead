@@ -108,6 +108,9 @@ impl FormatAdapter for TxtAdapter {
         }
 
         Ok(BookContent {
+            layout: justbook::Layout::Reflowable,
+            fixed: None,
+            keep_original: true,
             metadata,
             spine,
             toc,

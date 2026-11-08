@@ -9,17 +9,21 @@
 //! original format. Adding a format = adding an adapter + registering it in
 //! [`Registry::with_defaults`]; nothing else in the app changes.
 
+pub mod archive;
+pub mod comic;
 pub mod css;
 pub mod entities;
 pub mod epub;
 pub mod html;
+pub mod images;
+pub mod pdf;
 pub mod txt;
 
 use std::fs::File;
 use std::io::Read;
 use std::path::Path;
 
-use justbook::{JustBookWriter, Metadata, Resource, SpineItem, TocEntry};
+use justbook::{FixedContent, JustBookWriter, Layout, Metadata, Resource, SpineItem, TocEntry};
 use thiserror::Error;
 
 /// Version of the conversion pipeline, recorded in every manifest so that
@@ -66,6 +70,12 @@ pub struct Inspection {
 /// `Manifest` (adding the id and provenance).
 #[derive(Debug, Clone)]
 pub struct BookContent {
+    pub layout: Layout,
+    /// Page data for fixed-layout formats.
+    pub fixed: Option<FixedContent>,
+    /// When false, the pipeline does not keep `original/` (the package already
+    /// holds the source losslessly, e.g. the PDF itself or all comic pages).
+    pub keep_original: bool,
     pub metadata: Metadata,
     pub spine: Vec<SpineItem>,
     pub toc: Vec<TocEntry>,
@@ -84,6 +94,10 @@ pub enum FormatError {
     DrmProtected(String),
     #[error("unsupported file format")]
     Unsupported,
+    #[error("{0}")]
+    NotYetSupported(String),
+    #[error("this PDF is password-protected; remove the password with the tool that created it, then import it again")]
+    PasswordProtected,
     #[error("the file is damaged or not a valid {format}: {reason}")]
     Invalid {
         format: &'static str,
@@ -133,13 +147,20 @@ impl Registry {
     /// All adapters shipped with this build.
     pub fn with_defaults() -> Self {
         Self {
-            adapters: vec![Box::new(epub::EpubAdapter), Box::new(txt::TxtAdapter)],
+            adapters: vec![
+                Box::new(epub::EpubAdapter),
+                Box::new(txt::TxtAdapter),
+                Box::new(pdf::PdfAdapter),
+                Box::new(comic::CbzAdapter),
+                Box::new(comic::Cb7Adapter),
+                Box::new(comic::CbrAdapter),
+            ],
         }
     }
 
     /// Lower-case extensions accepted by the file picker.
     pub fn extensions(&self) -> Vec<&'static str> {
-        vec!["epub", "txt"]
+        vec!["epub", "txt", "pdf", "cbz", "cb7", "cbr"]
     }
 
     /// Pick the adapter with the highest confidence for `path`.

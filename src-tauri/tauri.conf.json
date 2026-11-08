@@ -26,15 +26,16 @@
       "freezePrototype": true,
       "csp": {
         "default-src": "'self'",
-        "script-src": "'self'",
+        "script-src": "'self' 'wasm-unsafe-eval'",
         "style-src": "'self' 'unsafe-inline' justbook: http://justbook.localhost",
         "img-src": "'self' justbook: http://justbook.localhost data: blob:",
         "font-src": "'self' justbook: http://justbook.localhost data:",
-        "connect-src": "ipc: http://ipc.localhost",
+        "connect-src": "'self' ipc: http://ipc.localhost justbook: http://justbook.localhost",
         "base-uri": "'self' justbook: http://justbook.localhost",
         "frame-src": "'self'",
         "object-src": "'none'",
-        "form-action": "'none'"
+        "form-action": "'none'",
+        "worker-src": "'self' blob:"
       },
       "devCsp": null
     }

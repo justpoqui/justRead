@@ -3,7 +3,7 @@
 
 //! A ZIP reader with safety limits.
 //!
-//! EPUBs are ZIP files and must be treated as hostile: they can declare
+//! EPUBs and CBZs are ZIP files and must be treated as hostile: they can declare
 //! absurd sizes, contain millions of entries, or decompress to gigabytes
 //! ("zip bombs"). Every read goes through [`SafeArchive`], which enforces
 //! hard limits and never extracts anything to disk by entry name.
@@ -27,6 +27,8 @@ pub const MAX_TOTAL_BYTES: u64 = 2 * 1024 * 1024 * 1024;
 /// ZIP archive wrapper; see module docs.
 pub struct SafeArchive {
     zip: ZipArchive<File>,
+    /// Format name used in error messages ("EPUB", "CBZ").
+    format: &'static str,
     /// lower-case name → real name, for case-insensitive fallback lookups.
     by_lower: HashMap<String, String>,
     /// real name → entry index.
@@ -36,10 +38,11 @@ pub struct SafeArchive {
 }
 
 impl SafeArchive {
-    /// Open `path` and index its entries.
-    pub fn open(path: &Path) -> Result<Self> {
+    /// Open `path` and index its entries. `format` labels error messages.
+    pub fn open(path: &Path, format: &'static str) -> Result<Self> {
         // STEP 1: parse the central directory.
         let file = File::open(path)?;
+        let invalid = |reason: String| FormatError::Invalid { format, reason };
         let mut zip = ZipArchive::new(file).map_err(|e| invalid(e.to_string()))?;
         if zip.len() > MAX_ENTRIES {
             return Err(FormatError::TooLarge(format!("{} entries", zip.len())));
@@ -63,6 +66,7 @@ impl SafeArchive {
         }
         Ok(Self {
             zip,
+            format,
             by_lower,
             by_name,
             total_read: 0,
@@ -91,6 +95,8 @@ impl SafeArchive {
     /// Read a whole entry, enforcing the size limits.
     pub fn read(&mut self, name: &str) -> Result<Vec<u8>> {
         // STEP 1: locate the entry.
+        let format = self.format;
+        let invalid = |reason: String| FormatError::Invalid { format, reason };
         let real = self
             .find(name)
             .ok_or_else(|| invalid(format!("missing entry {name}")))?;
@@ -118,12 +124,5 @@ impl SafeArchive {
     /// Read an entry as text (BOM/declaration-aware decoding).
     pub fn read_text(&mut self, name: &str) -> Result<String> {
         Ok(crate::decode_text(&self.read(name)?))
-    }
-}
-
-fn invalid(reason: String) -> FormatError {
-    FormatError::Invalid {
-        format: "EPUB",
-        reason,
     }
 }

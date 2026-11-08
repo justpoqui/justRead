@@ -6,7 +6,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use crate::manifest::{Manifest, TocEntry, SCHEMA_VERSION};
+use crate::manifest::{FixedKind, Layout, Manifest, TocEntry, SCHEMA_VERSION};
 use crate::paths::normalize_relative;
 use crate::{Error, Result};
 
@@ -24,6 +24,19 @@ pub fn load_manifest(package_dir: &Path) -> Result<Manifest> {
         });
     }
     Ok(manifest)
+}
+
+/// Rewrite `manifest.json` of an existing package atomically (temp file + rename),
+/// after validating it against the files on disk.
+pub fn update_manifest(package_dir: &Path, manifest: &Manifest) -> Result<()> {
+    let issues = validate(manifest, package_dir);
+    if !issues.is_empty() {
+        return Err(Error::Invalid(issues.join("; ")));
+    }
+    let tmp = package_dir.join("manifest.json.tmp");
+    fs::write(&tmp, serde_json::to_vec_pretty(manifest)?)?;
+    fs::rename(tmp, package_dir.join("manifest.json"))?;
+    Ok(())
 }
 
 /// Map a package-relative path to an absolute path inside `package_dir`,
@@ -51,8 +64,26 @@ pub fn validate(manifest: &Manifest, dir: &Path) -> Vec<String> {
     if manifest.metadata.title.trim().is_empty() {
         issues.push("title is empty".to_string());
     }
-    if manifest.spine.is_empty() {
-        issues.push("spine is empty".to_string());
+    match (manifest.layout, &manifest.fixed) {
+        (Layout::Reflowable, _) if manifest.spine.is_empty() => {
+            issues.push("spine is empty".to_string())
+        }
+        (Layout::Fixed, None) => issues.push("fixed layout without page data".to_string()),
+        (Layout::Fixed, Some(f)) => {
+            if f.page_count == 0 {
+                issues.push("fixed layout has no pages".to_string());
+            }
+            match f.kind {
+                FixedKind::Pdf if f.document.is_none() => {
+                    issues.push("PDF document missing".to_string())
+                }
+                FixedKind::Images if f.pages.len() != f.page_count as usize => {
+                    issues.push("page count does not match page list".to_string())
+                }
+                _ => {}
+            }
+        }
+        _ => {}
     }
 
     // STEP 2: every referenced file must exist.
@@ -70,8 +101,19 @@ pub fn validate(manifest: &Manifest, dir: &Path) -> Vec<String> {
     if let Some(cover) = &manifest.cover {
         check("cover", cover);
     }
+    if let Some(f) = &manifest.fixed {
+        if let Some(doc) = &f.document {
+            check("document", doc);
+        }
+        for p in &f.pages {
+            check("page", &p.href);
+        }
+    }
 
-    // STEP 3: TOC targets must be spine items.
+    // STEP 3: TOC targets must be spine items (fixed books use "page:N" targets).
+    if manifest.layout == Layout::Fixed {
+        return issues;
+    }
     fn walk(entries: &[TocEntry], m: &Manifest, issues: &mut Vec<String>) {
         for e in entries {
             if let Some(h) = &e.href {

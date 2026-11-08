@@ -27,9 +27,11 @@ arbitrary publisher markup. Because justRead normalizes every book and stamps st
 import, a (block, text offset) pair is enough: shorter, trivial to resolve, and **unchanged when
 highlights wrap text in `<mark>` elements** (offsets count text only).
 
-### Fixed locators (Phase 3)
+### Fixed locators (PDF, comics)
 
-`page` is 0-based; `offset` is the vertical fraction of the page at the top of the viewport.
+`page` is 0-based; `offset` is the fraction of the page above the viewport top (0 in paginated mode).
+The fixed engine keeps an anchor exactly like the text engine, so pages ⇄ scroll, zoom and fit changes
+return to the same page and position.
 
 ## Ordering
 

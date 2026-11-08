@@ -1,6 +1,6 @@
 # justRead architecture
 
-_Last updated: Phase 2 complete._
+_Last updated: Phase 3 complete._
 
 ## Overview
 
@@ -12,6 +12,8 @@ _Last updated: Phase 2 complete._
 │                         ▼                                                               │
 │   lib/reader  (framework-free engine)                                                   │
 │     engine.ts ── PaginatedView | ScrolledView ── chapter iframes (srcdoc + CSP)          │
+│   lib/fixed   (PDF & comics)                                                            │
+│     fixed-engine.ts ── PageSource: PdfSource (PDF.js canvas) | ImageSource (<img>)      │
 │     locator.ts / dom-locator.ts  ⇄  "f:spine/block:offset"                              │
 │                         │ invoke()                    ▲ justbook://<id>/<path>          │
 ├─────────────────────────┼─────────────────────────────┼─────────────────────────────────┤
@@ -20,7 +22,7 @@ _Last updated: Phase 2 complete._
 │  justread-library ── SQLite (books, progress, annotations, settings)                    │
 │        │ import pipeline                                                                │
 │        ▼                                                                                │
-│  justread-formats ── Registry ── EpubAdapter | TxtAdapter   (FormatAdapter trait)       │
+│  justread-formats ── Registry ── Epub | Txt | Pdf | Cbz | Cb7 | Cbr (FormatAdapter)      │
 │        │ normalize on import                                                            │
 │        ▼                                                                                │
 │  justbook ── package writer / manifest / ChapterWriter  →  <data>/books/<uuid>/         │
@@ -75,6 +77,20 @@ NCX) → each spine document through `html::normalize` → cover.
 attributes; scripts/forms/embeds removed; unknown elements unwrapped; links and resources rewritten to
 package paths; `<style>`/`<link>` collected; output through `ChapterWriter`.
 
+**Fixed-layout pipelines** (Phase 3) produce `layout: "fixed"` packages with a `fixed` section
+(docs/JUSTBOOK_SPEC.md):
+
+* **PDF** (`pdf/`): DRM handlers (`/EBX_HANDLER`, LiveCycle, FileOpen, …) are refused; empty-user-password
+  PDFs open; real passwords get a clear message. `lopdf` reads metadata and the page count; the file is
+  stored unchanged as `content/book.pdf`. **Rendering is PDF.js in the UI**: no PDF engine of our own.
+* **CBZ / CB7** (`comic/`): page images copied unchanged to `pages/`, sizes read from image headers
+  (`images.rs`), natural page order (`p2` < `p10`), `ComicInfo.xml` metadata and manga RTL flag,
+  first page as cover. ZIP via `SafeArchive`, 7z via `sevenz-rust2`, both with size limits.
+* **CBR**: recognized but not converted (see adr/0006); `.cbr` files that are really ZIP/7z are imported.
+
+For PDFs and comics the package already holds the source losslessly, so `original/` is not kept
+(`BookContent.keep_original = false`).
+
 **TXT pipeline**: encoding detection (BOM → declared → UTF-8 → chardetng), Gutenberg header/boilerplate
 handling, paragraph detection, heading heuristics, splitting of very long chapters.
 
@@ -118,6 +134,20 @@ Migrations are append-only SQL tracked with `PRAGMA user_version`.
 | `highlights.ts` | Paint/clear `<mark>` highlights without changing text offsets |
 | `frame.ts` | iframe creation, loading, event wiring |
 
+### Fixed-layout engine (`ui/src/lib/fixed`)
+
+| File | Role |
+|---|---|
+| `fixed-engine.ts` | Same `Engine` contract as the text engine; paginated (single/spread) and continuous scroll; anchor `p:<page>@<offset>` |
+| `sources.ts` | `PdfSource` (PDF.js → `<canvas>`, outline → TOC, cover rendering) and `ImageSource` (comic pages) |
+| `layout.ts` | Pure math: spreads (cover alone, landscape pages alone), fit-page/fit-width, zoom, canvas memory cap |
+
+PDF.js runs with its worker, local CMaps/standard fonts/wasm decoders (copied to `ui/public/pdfjs` by
+`ui/scripts/copy-pdfjs.mjs`), no XFA and no scripting engine (QuickJS is not shipped). The app CSP
+adds only `'wasm-unsafe-eval'` (image decoders), `worker-src 'self' blob:` and `connect-src justbook:`.
+In scroll mode pages render only near the viewport and canvases far away are released.
+PDF covers are rendered from page 1 by the library view and stored with `set_cover`.
+
 ### Position model
 
 Positions are **locators**, never page numbers (docs/LOCATOR_SPEC.md). The engine keeps an
@@ -145,8 +175,8 @@ languages, and end-to-end runs in Chromium (mocked IPC) and in the real app on W
 |---|---|---|
 | 1 | Scaffold, SQLite library, EPUB + TXT → justBook, single page + scroll, themes & fonts, desktop | ✅ done |
 | 2 | Two-page spread, highlights/notes/bookmarks, position persistence across layouts | ✅ done |
-| 3 | PDF (PDF.js) and comics (CBZ/CBR/CB7) | next |
-| 4 | MOBI, AZW3, FB2, HTML, DOCX adapters; DjVu | |
+| 3 | PDF (PDF.js) and comics (CBZ/CB7; CBR pending license decision) | ✅ done |
+| 4 | MOBI, AZW3, FB2, HTML, DOCX adapters; DjVu | next |
 | 5 | justBrowse (privacy-hardened browser) | |
 | 6 | Android and iOS | |
 | 7 | Markdown highlight export / JustNotes | |
@@ -158,5 +188,8 @@ languages, and end-to-end runs in Chromium (mocked IPC) and in the real app on W
   A built-in hyphenator (Liang patterns; pattern licenses to be vetted) is a candidate for later.
 * Right-to-left and vertical writing modes are not yet paginated correctly.
 * MathML is unwrapped to text; audio/video are dropped.
+* PDFs: no text selection, highlights or search yet (bookmarks work); highlights need the PDF.js text
+  layer (later). Annotations in fixed books are bookmarks only.
+* CBR import awaits a decision on the unRAR license (adr/0006).
 * Folder watch import is deferred (see open questions in the Phase 1 plan).
 * Imports hold the library lock while converting; very large batches block other commands until done.

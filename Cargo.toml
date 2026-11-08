@@ -38,4 +38,6 @@ quick-xml = "0.42"                                 # MIT
 encoding_rs = "0.8"                                # (Apache-2.0 OR MIT) AND BSD-3-Clause
 chardetng = "1"                                    # Apache-2.0 OR MIT
 rusqlite = { version = "0.41", features = ["bundled"] } # MIT (SQLite: public domain)
+lopdf = { version = "0.47", default-features = false } # MIT
+sevenz-rust2 = { version = "0.25", default-features = false } # Apache-2.0
 tempfile = "3"                                     # MIT OR Apache-2.0

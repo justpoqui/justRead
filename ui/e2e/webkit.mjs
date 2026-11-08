@@ -51,7 +51,7 @@ try {
   // STEP 1: library from the real SQLite database.
   await sleep(2500);
   const books = await invoke("list_books", { query: { sort: "title", descending: false } });
-  check(Array.isArray(books) && books.length === 2, "real backend lists the seeded books", books.map?.((b) => b.title).join(", "));
+  check(Array.isArray(books) && books.length === 4, "real backend lists the seeded books", books.map?.((b) => b.title).join(", "));
   await shot("w1-library.png");
 
   // STEP 2: open the EPUB by clicking its card.
@@ -117,6 +117,39 @@ try {
   await click(fr.x, fr.y);
   await sleep(1000);
   check((await pos()) !== before, "clicking the right edge of the page turns it", `${before} → ${await pos()}`);
+  // STEP 7 (Phase 3): PDF.js under the app CSP, fetching through justbook://.
+  await exec(() => document.querySelector('button[title="Back to library (Esc)"]').click());
+  await sleep(4000); // the library renders the PDF cover in the background
+  const pdfBook = (await invoke("list_books", { query: { sort: "title", descending: false } })).find((b) => b.format === "pdf");
+  check(pdfBook?.cover === "cover.jpg", "PDF cover rendered by PDF.js and saved via IPC", pdfBook?.cover);
+  await shot("w5-library-covers.png");
+  await exec(() => [...document.querySelectorAll(".card")].find((c) => c.innerText.includes("Lantern Atlas")).click());
+  await sleep(3000);
+  const pdf = await exec(() => {
+    const c = document.querySelector(".jr-page canvas");
+    if (!c) return { canvas: false };
+    const d = c.getContext("2d").getImageData(0, 0, c.width, Math.floor(c.height / 3)).data;
+    let dark = 0;
+    for (let i = 0; i < d.length; i += 4) if (d[i] < 100 && d[i + 1] < 100 && d[i + 2] < 100) dark++;
+    return { canvas: true, dark, pos: document.querySelector(".pos").innerText };
+  });
+  check(pdf.canvas && pdf.dark > 200, "PDF renders in WebKitGTK", JSON.stringify(pdf));
+  await keys("\uE014");
+  await sleep(1200);
+  const pdfLoc = (await invoke("open_book", { id: pdfBook.id })).progress?.locator;
+  check(/^p:\d+@0$/.test(pdfLoc ?? ""), "PDF position saved as a page locator", pdfLoc);
+  await shot("w6-pdf.png");
+
+  // STEP 8: the comic.
+  await exec(() => document.querySelector('button[title="Back to library (Esc)"]').click());
+  await sleep(1500);
+  await exec(() => [...document.querySelectorAll(".card")].find((c) => c.innerText.includes("Harbor Lights")).click());
+  await sleep(2000);
+  await keys("\uE014");
+  await sleep(1200);
+  const comic = await exec(() => [...document.querySelectorAll(".jr-page img")].map((i) => i.naturalWidth));
+  check(comic.length >= 1 && comic.every((w) => w > 0), "comic pages load through justbook://", JSON.stringify(comic));
+  await shot("w7-comic.png");
 } catch (e) {
   failures++;
   console.log("FAIL  scenario aborted:", e.message);

@@ -35,6 +35,42 @@ pub struct Manifest {
     pub cover: Option<String>,
     /// Where the book came from.
     pub source: SourceInfo,
+    /// Page data for fixed-layout books (PDF, comics). `None` for reflowable.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fixed: Option<FixedContent>,
+}
+
+/// Fixed-layout content: either one PDF document or a sequence of page images.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FixedContent {
+    pub kind: FixedKind,
+    pub page_count: u32,
+    /// Package path of the PDF (`kind == Pdf`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub document: Option<String>,
+    /// Page images in reading order (`kind == Images`).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub pages: Vec<FixedPage>,
+    /// Pages read right-to-left (manga). Affects spreads and page turns.
+    #[serde(default)]
+    pub right_to_left: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum FixedKind {
+    Pdf,
+    Images,
+}
+
+/// One page image with its intrinsic size (so layout needs no image decoding).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FixedPage {
+    pub href: String,
+    pub width: u32,
+    pub height: u32,
 }
 
 /// How the book is rendered.
@@ -167,6 +203,7 @@ mod tests {
                 sha256: "00".into(),
                 converter_version: "1".into(),
             },
+            fixed: None,
         }
     }
 

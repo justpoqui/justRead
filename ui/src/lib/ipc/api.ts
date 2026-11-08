@@ -32,6 +32,8 @@ export const api = {
   updateAnnotation: (id: string, patch: { note?: string; color?: string }) =>
     invoke<Annotation>("update_annotation", { id, patch }),
   deleteAnnotation: (id: string) => invoke<void>("delete_annotation", { id }),
+  // Bytes travel as a number array; covers are small (~30 KB JPEG).
+  setCover: (bookId: string, bytes: Uint8Array) => invoke<string>("set_cover", { bookId, bytes: Array.from(bytes) }),
 };
 
 /**

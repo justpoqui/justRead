@@ -105,6 +105,7 @@ fn convert(src: &Path, out_root: &Path) -> (Manifest, PathBuf) {
             sha256: "0".into(),
             converter_version: "1".into(),
         },
+        fixed: content.fixed,
     };
     w.finish(&manifest).unwrap();
     (load_manifest(&dest).unwrap(), dest)

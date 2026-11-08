@@ -10,6 +10,7 @@
   import type { BookSummary, ImportResult, SortKey } from "../lib/ipc/types";
   import { libraryPrefs, saveLibraryPrefs } from "../lib/settings/store.svelte";
   import { toast } from "../lib/stores/toasts.svelte";
+  import { packageUrl } from "../lib/ipc/api";
 
   let { onopen }: { onopen: (id: string) => void } = $props();
 
@@ -28,10 +29,28 @@
     { key: "added", label: "Date added" },
   ];
 
+  // PDFs have no cover image inside; render page 1 once, in the background.
+  const coverAttempted = new Set<string>();
+  async function ensurePdfCovers(list: BookSummary[]) {
+    for (const b of list) {
+      if (b.format !== "pdf" || b.cover || coverAttempted.has(b.id)) continue;
+      coverAttempted.add(b.id);
+      try {
+        const { renderPdfCover } = await import("../lib/fixed/sources");
+        const bytes = await renderPdfCover(packageUrl(b.id, "content/book.pdf"));
+        const cover = await api.setCover(b.id, bytes);
+        books = books.map((x) => (x.id === b.id ? { ...x, cover } : x));
+      } catch (e) {
+        console.warn("cover generation failed", b.id, e);
+      }
+    }
+  }
+
   // STEP 1: (re)load whenever search or sorting changes.
   async function refresh() {
     try {
       books = await api.listBooks({ search: search || null, sort: libraryPrefs.sort, descending: libraryPrefs.descending });
+      void ensurePdfCovers(books);
     } catch (e) {
       toast(String(e), "error");
     } finally {
@@ -158,7 +177,7 @@
         {:else}
           <Icon name="book" size={48} />
           <h2>Your library is empty</h2>
-          <p>Import EPUB or TXT files, or drop them anywhere on this window.</p>
+          <p>Import EPUB, PDF, TXT or comic (CBZ/CB7) files, or drop them anywhere on this window.</p>
           <button class="btn primary" onclick={pickFiles}><Icon name="plus" size={16} /> Import books</button>
         {/if}
       </div>

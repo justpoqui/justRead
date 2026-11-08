@@ -78,6 +78,10 @@ export async function installBackend() {
         Object.assign(a, args.patch);
         return a;
       }
+      case "set_cover":
+        // Recorded so the test can check that a real JPEG was rendered. The mock
+        // has nowhere to store it, so report "no cover" (the UI keeps its placeholder).
+        return null;
       case "delete_annotation":
         state.annotations = state.annotations.filter((x) => x.id !== args.id);
         return null;

@@ -28,6 +28,10 @@ export interface ReaderSettings {
   customColors: { background: string; text: string; link: string };
   flow: FlowMode;
   spread: SpreadMode;
+  /** Fixed-layout books: fit the whole page or the page width. */
+  fit: "page" | "width";
+  /** Fixed-layout zoom on top of the fit (1 = 100 %). */
+  zoom: number;
 }
 
 export const DEFAULT_SETTINGS: ReaderSettings = {
@@ -44,6 +48,8 @@ export const DEFAULT_SETTINGS: ReaderSettings = {
   customColors: { background: "#1d2b2f", text: "#d9e4dd", link: "#8fc7b5" },
   flow: "paginated",
   spread: "auto",
+  fit: "page",
+  zoom: 1,
 };
 
 /** System font stacks — nothing is downloaded or bundled (offline, no OFL dependency). */
@@ -87,6 +93,8 @@ export function sanitizeSettings(raw: unknown): ReaderSettings {
   if (!["light", "sepia", "dark", "black", "custom"].includes(s.theme)) s.theme = "light";
   if (!["paginated", "scrolled"].includes(s.flow)) s.flow = "paginated";
   if (!["auto", "always", "never"].includes(s.spread)) s.spread = "auto";
+  if (!["page", "width"].includes(s.fit)) s.fit = "page";
+  s.zoom = clamp(s.zoom, 0.5, 5, 1);
   // A custom font name is inserted into CSS: allow only safe characters.
   s.customFont = String(s.customFont ?? "").replace(/[^\p{L}\p{N} _-]/gu, "").slice(0, 64);
   s.customColors = { ...DEFAULT_SETTINGS.customColors, ...(s.customColors ?? {}) };

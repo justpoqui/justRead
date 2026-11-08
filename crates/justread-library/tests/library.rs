@@ -243,3 +243,61 @@ fn migrations_are_idempotent() {
         .unwrap();
     assert_eq!(v, db::latest_version());
 }
+
+#[test]
+fn fixed_layout_import_and_cover() {
+    // STEP 1: a tiny PDF (one page) built by hand.
+    let tmp = tempfile::tempdir().unwrap();
+    let mut lib = Library::open_in_memory(&tmp.path().join("books")).unwrap();
+    let objs = [
+        "<< /Type /Catalog /Pages 2 0 R >>",
+        "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 300] >>",
+    ];
+    let mut pdf = b"%PDF-1.4\n".to_vec();
+    let mut offs = vec![];
+    for (i, o) in objs.iter().enumerate() {
+        offs.push(pdf.len());
+        pdf.extend_from_slice(format!("{} 0 obj\n{o}\nendobj\n", i + 1).as_bytes());
+    }
+    let x = pdf.len();
+    pdf.extend_from_slice(b"xref\n0 4\n0000000000 65535 f \n");
+    for o in offs {
+        pdf.extend_from_slice(format!("{o:010} 00000 n \n").as_bytes());
+    }
+    pdf.extend_from_slice(
+        format!("trailer\n<< /Size 4 /Root 1 0 R >>\nstartxref\n{x}\n%%EOF\n").as_bytes(),
+    );
+    let src = tmp.path().join("Field Notes.pdf");
+    std::fs::write(&src, &pdf).unwrap();
+
+    // STEP 2: import → fixed layout, no duplicate original, title from file name.
+    let ImportOutcome::Imported { book, .. } = lib
+        .import(&src, &justread_formats::Registry::with_defaults())
+        .unwrap()
+    else {
+        panic!()
+    };
+    assert_eq!(book.title, "Field Notes");
+    assert_eq!(book.format, "pdf");
+    let m = lib.manifest(&book.id).unwrap();
+    assert_eq!(m.layout, justbook::Layout::Fixed);
+    assert_eq!(m.fixed.as_ref().unwrap().page_count, 1);
+    let dir = lib.package_dir(&book.id).unwrap();
+    assert!(!dir.join("original").exists());
+
+    // STEP 3: the UI-rendered cover is stored; junk is refused.
+    assert!(lib.set_cover(&book.id, b"<svg/>").is_err());
+    assert_eq!(
+        lib.set_cover(&book.id, b"\x89PNG\r\n\x1a\nrest").unwrap(),
+        "cover.png"
+    );
+    assert_eq!(
+        lib.get_book(&book.id).unwrap().cover.as_deref(),
+        Some("cover.png")
+    );
+    assert_eq!(
+        lib.manifest(&book.id).unwrap().cover.as_deref(),
+        Some("cover.png")
+    );
+}

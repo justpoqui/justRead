@@ -57,6 +57,9 @@ exceptions = [
     { crate = "zerovec-derive", allow = ["Unicode-3.0"] },
     # "(MIT OR Apache-2.0) AND Unicode-3.0": Unicode data tables used by the Rust parser ecosystem.
     { crate = "unicode-ident", allow = ["Unicode-3.0"] },
+    # Same license expression; Unicode tables used by lopdf (PDF metadata).
+    { crate = "unicode-normalization", allow = ["Unicode-3.0"] },
+    { crate = "unicode-properties", allow = ["Unicode-3.0"] },
 ]
 
 [bans]

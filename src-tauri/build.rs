@@ -20,6 +20,7 @@ const COMMANDS: &[&str] = &[
     "open_book",
     "read_chapter",
     "save_progress",
+    "set_cover",
     "get_setting",
     "set_setting",
     "list_annotations",

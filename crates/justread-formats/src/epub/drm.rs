@@ -20,8 +20,8 @@ use justbook::paths::{normalize_relative, percent_decode};
 use quick_xml::events::Event;
 use quick_xml::Reader;
 
-use super::archive::SafeArchive;
 use super::opf::attr;
+use crate::archive::SafeArchive;
 use crate::DrmStatus;
 
 /// IDPF font obfuscation algorithm URI (EPUB 3.3 §4.4).

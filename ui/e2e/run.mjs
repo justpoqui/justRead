@@ -8,6 +8,7 @@
 // The library dir is produced by `cargo run -p justread-library --example import`.
 
 import { createServer } from "vite";
+import { execFileSync } from "node:child_process";
 import { createRequire } from "node:module";
 import { readdirSync, readFileSync, existsSync, mkdirSync } from "node:fs";
 import { join, normalize, resolve, extname } from "node:path";
@@ -22,7 +23,7 @@ const booksDir = join(dataDir, "books");
 if (!existsSync(booksDir)) throw new Error(`no books in ${booksDir}`);
 
 // STEP 1: dev server + a tiny static handler for the packages.
-const MIME = { ".json": "application/json", ".xhtml": "application/xhtml+xml", ".css": "text/css", ".png": "image/png", ".jpg": "image/jpeg" };
+const MIME = { ".json": "application/json", ".xhtml": "application/xhtml+xml", ".css": "text/css", ".png": "image/png", ".jpg": "image/jpeg", ".pdf": "application/pdf" };
 const booksPlugin = {
   name: "justread-e2e-books",
   configureServer(server) {
@@ -42,6 +43,7 @@ const booksPlugin = {
     });
   },
 };
+execFileSync("node", ["scripts/copy-pdfjs.mjs"]); // PDF.js data must be in public/
 const server = await createServer({ root: resolve("."), server: { port: 5174, strictPort: true }, plugins: [booksPlugin], logLevel: "warn" });
 await server.listen();
 
@@ -74,7 +76,7 @@ try {
   // STEP 3: library.
   await page.goto("http://localhost:5174/e2e/index.html");
   await page.waitForSelector(".card");
-  check((await page.locator(".card").count()) === 2, "library lists both imported books");
+  check((await page.locator(".card").count()) === 4, "library lists all imported books (EPUB, TXT, PDF, CBZ)");
   await page.screenshot({ path: join(shots, "01-library.png") });
 
   // STEP 4: open the EPUB; paginated by default.
@@ -226,6 +228,105 @@ try {
   await settle();
   const txt = await frameDoc((doc) => doc.body.textContent);
   check(txt.includes("quiet morning"), "TXT book renders");
+
+  // ===== Phase 3: fixed layouts =====================================
+  await page.setViewportSize({ width: 1000, height: 760 });
+  await page.locator('button[title="Back to library (Esc)"]').click();
+  await page.waitForSelector(".card");
+
+  // STEP 16: the library renders a PDF cover with PDF.js and stores it.
+  await page.waitForFunction(() => window.__jr.calls.some((c) => c.cmd === "set_cover"), null, { timeout: 15000 }).catch(() => {});
+  const cover = await page.evaluate(() => window.__jr.calls.find((c) => c.cmd === "set_cover")?.args.bytes ?? []);
+  check(cover.length > 1000 && cover[0] === 0xff && cover[1] === 0xd8, "PDF cover rendered to JPEG and stored", `${cover.length} bytes`);
+
+  // STEP 17: open the PDF.
+  await page.locator(".card", { hasText: "The Lantern Atlas" }).click();
+  await page.waitForSelector(".jr-page canvas", { timeout: 15000 });
+  await settle();
+  check(/Page 1 of 8/.test(await posText()), "PDF opens on page 1 of 8", await posText());
+  const ink = await page.evaluate(() => {
+    const c = document.querySelector(".jr-page canvas");
+    const d = c.getContext("2d").getImageData(0, 0, c.width, Math.floor(c.height / 3)).data;
+    let dark = 0;
+    for (let i = 0; i < d.length; i += 4) if (d[i] < 100 && d[i + 1] < 100 && d[i + 2] < 100) dark++;
+    return dark;
+  });
+  check(ink > 200, "PDF text is actually drawn on the canvas", `${ink} dark pixels`);
+  await page.screenshot({ path: join(shots, "08-pdf.png") });
+
+  await page.keyboard.press("ArrowRight");
+  await page.keyboard.press("ArrowRight");
+  await settle();
+  const pdfLoc = await page.evaluate(() => [...window.__jr.progress.entries()].find(([, v]) => v.locator.startsWith("p:"))?.[1].locator);
+  // At this width PDFs use the automatic spread: [1], [2–3], [4–5], …
+  check(/Pages 4–5 of 8/.test(await posText()) && pdfLoc === "p:3@0", "PDF spread page turns save a page locator", `${await posText()} ${pdfLoc}`);
+
+  // STEP 18: PDF in scroll mode keeps the page, renders lazily, and returns.
+  await page.locator('button[title="Switch to scrolling"]').click();
+  await settle(1200);
+  const slots = await page.evaluate(() => ({ all: document.querySelectorAll(".jr-page").length, drawn: document.querySelectorAll(".jr-page canvas").length }));
+  check(/Page 4 of 8/.test(await posText()), "PDF scroll mode opens at the same page", await posText());
+  check(slots.all === 8 && slots.drawn >= 1 && slots.drawn < 8 + 1, "pages are placeholders until near the viewport", JSON.stringify(slots));
+  await page.locator('button[title="Switch to pages"]').click();
+  await settle();
+  check(/Pages 4–5 of 8/.test(await posText()), "…and back to the same spread in paginated mode", await posText());
+
+  // STEP 19: outline → TOC.
+  await page.locator('button[title="Contents"]').click();
+  const tocTitles = await page.locator(".side button").allInnerTexts();
+  check(tocTitles.join("|") === "Part One|Part Two", "PDF outline becomes the table of contents", tocTitles.join("|"));
+  await page.locator(".side button", { hasText: "Part Two" }).click();
+  await settle();
+  check(/Pages 4–5 of 8/.test(await posText()) && (await page.evaluate(() => [...window.__jr.progress.values()].find((v) => v.locator.startsWith("p:"))?.locator)) === "p:4@0", "outline entry jumps to its page (page 5)", await posText());
+
+  // STEP 20: zoom with the keyboard; fit-width via settings.
+  // Switch to single pages for the zoom/fit checks.
+  await page.locator('button[title="Reading settings"]').click();
+  await page.locator("select").filter({ hasText: "Automatic" }).selectOption("never");
+  await page.locator('button[title="Reading settings"]').click();
+  await settle();
+  const w0 = await page.evaluate(() => document.querySelector(".jr-page").getBoundingClientRect().width);
+  await page.keyboard.press("+");
+  await settle(700);
+  const w1 = await page.evaluate(() => document.querySelector(".jr-page").getBoundingClientRect().width);
+  check(w1 > w0 * 1.05, "+ zooms in", `${Math.round(w0)} → ${Math.round(w1)}`);
+  await page.keyboard.press("0");
+  await settle(700);
+  await page.locator('button[title="Reading settings"]').click();
+  await page.locator("button", { hasText: "Fit width" }).click();
+  await settle(800);
+  const fw = await page.evaluate(() => ({ w: Math.round(document.querySelector(".jr-page").getBoundingClientRect().width), host: document.querySelector(".host").clientWidth }));
+  check(fw.w > fw.host * 0.9, "fit width fills the reading area", JSON.stringify(fw));
+  check(/Page 5 of 8/.test(await posText()), "fit change keeps the page", await posText());
+  await page.screenshot({ path: join(shots, "10-pdf-fitwidth.png") });
+  await page.locator("button", { hasText: "Fit page" }).click();
+  await page.locator("select").filter({ hasText: "Automatic" }).selectOption("auto");
+  await page.locator('button[title="Reading settings"]').click();
+  await settle();
+
+  // STEP 21: bookmark a PDF page.
+  await page.keyboard.press("b");
+  await settle(500);
+  const pdfBm = await page.evaluate(() => window.__jr.annotations.filter((a) => a.kind === "bookmark" && a.start.startsWith("p:")).map((a) => a.start));
+  check(pdfBm.length === 1 && pdfBm[0] === "p:4@0", "bookmark on a PDF page stores a page locator", pdfBm.join(","));
+
+  // STEP 22: the comic — natural page order, cover alone, landscape page alone.
+  await page.locator('button[title="Back to library (Esc)"]').click();
+  await page.locator(".card", { hasText: "Harbor Lights" }).click();
+  await page.waitForSelector(".jr-page img");
+  await settle();
+  const shape = async () => page.evaluate(() => [...document.querySelectorAll(".jr-page")].map((s) => Number(s.dataset.page)));
+  check(/Page 1 of 9/.test(await posText()), "comic opens on page 1 of 9", await posText());
+  check((await shape()).length === 1, "cover is shown alone");
+  await page.keyboard.press("ArrowRight");
+  await settle(600);
+  check(JSON.stringify(await shape()) === "[1,2]", "pages 2–3 form a spread", JSON.stringify(await shape()));
+  await page.screenshot({ path: join(shots, "09-comic-spread.png") });
+  await page.keyboard.press("ArrowRight");
+  await page.keyboard.press("ArrowRight");
+  await settle(600);
+  const wide = await page.evaluate(() => { const i = document.querySelector(".jr-page img"); return { pages: document.querySelectorAll(".jr-page").length, w: i.naturalWidth, h: i.naturalHeight }; });
+  check(wide.pages === 1 && wide.w > wide.h, "the landscape double page stands alone", JSON.stringify(wide));
 
   check(errors.length === 0, "no page errors", errors.slice(0, 3).join(" | "));
 } catch (e) {

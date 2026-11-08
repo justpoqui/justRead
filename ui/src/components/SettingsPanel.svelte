@@ -3,6 +3,9 @@
   import { settings, saveSettings } from "../lib/settings/store.svelte";
   import { THEMES, type FontChoice, type ThemeId } from "../lib/settings/reader-settings";
 
+  /** Fixed-layout books (PDF/comics) get fit & zoom instead of typography. */
+  let { fixed = false }: { fixed?: boolean } = $props();
+
   // Every control writes straight into the shared settings object; the
   // reader reacts to the change and re-lays out in place.
   const fonts: { id: FontChoice; label: string }[] = [
@@ -58,6 +61,18 @@
     </div>
   {/if}
 
+  {#if fixed}
+  <h3>Page</h3>
+  <div class="seg" role="radiogroup" aria-label="Fit">
+    <button role="radio" aria-checked={settings.fit === "page"} class:on={settings.fit === "page"}
+      onclick={() => ((settings.fit = "page"), saveSettings())}>Fit page</button>
+    <button role="radio" aria-checked={settings.fit === "width"} class:on={settings.fit === "width"}
+      onclick={() => ((settings.fit = "width"), saveSettings())}>Fit width</button>
+  </div>
+  <div class="row"><span>Zoom</span><span>{Math.round(settings.zoom * 100)}%</span></div>
+  <input type="range" aria-label="Zoom" min="0.5" max="5" step="0.05" bind:value={settings.zoom} onchange={saveSettings} />
+  <p class="hint">Ctrl + scroll or + / − to zoom, 0 to reset.</p>
+  {:else}
   <h3>Text</h3>
   <label class="row">Font
     <select bind:value={settings.font} onchange={saveSettings}>
@@ -78,6 +93,7 @@
   <label class="check"><input type="checkbox" bind:checked={settings.justify} onchange={saveSettings} /> Justify text</label>
   <label class="check"><input type="checkbox" bind:checked={settings.hyphenation} onchange={saveSettings} /> Hyphenation</label>
   <label class="check"><input type="checkbox" bind:checked={settings.publisherStyles} onchange={saveSettings} /> Keep publisher styles</label>
+  {/if}
 </section>
 
 <style>
@@ -124,6 +140,11 @@
   .seg button.on {
     background: var(--accent);
     color: #fff;
+  }
+  .hint {
+    margin: 0;
+    font-size: 12px;
+    color: var(--muted);
   }
   .themes {
     display: flex;

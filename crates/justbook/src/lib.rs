@@ -30,8 +30,9 @@ pub mod xhtml;
 
 pub use error::{Error, Result};
 pub use manifest::{
-    Layout, Manifest, Metadata, Resource, SourceInfo, SpineItem, TocEntry, SCHEMA_VERSION,
+    FixedContent, FixedKind, FixedPage, Layout, Manifest, Metadata, Resource, SourceInfo,
+    SpineItem, TocEntry, SCHEMA_VERSION,
 };
-pub use reader::{load_manifest, resolve_in_package};
+pub use reader::{load_manifest, resolve_in_package, update_manifest};
 pub use writer::JustBookWriter;
 pub use xhtml::{ChapterStats, ChapterWriter};

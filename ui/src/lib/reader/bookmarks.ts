@@ -7,6 +7,15 @@ import type { Annotation } from "../ipc/types";
 import { compareLocators, parseLocator } from "./locator";
 import type { VisibleRange } from "./view";
 
+/** Bookmarks on the visible pages of a fixed-layout book. */
+export function bookmarksOnPages(list: Annotation[], pages: number[] | null): Annotation[] {
+  if (!pages) return [];
+  return list.filter((a) => {
+    const loc = a.kind === "bookmark" ? parseLocator(a.start) : null;
+    return loc?.kind === "fixed" && pages.includes(loc.page);
+  });
+}
+
 /** Bookmarks whose position lies in [range.start, range.end). */
 export function bookmarksInRange(list: Annotation[], range: VisibleRange | null): Annotation[] {
   if (!range) return [];
