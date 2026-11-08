@@ -147,7 +147,7 @@ Migrations are append-only SQL tracked with `PRAGMA user_version`.
 | `engine.ts` | Owns the active view, chapter cache, annotations, the **anchor**, events |
 | `paginated.ts` | One chapter in CSS columns; 1 or 2 columns per screen; horizontal scroll per screen |
 | `scrolled.ts` | Chapters stacked vertically, auto-height iframes, neighbours loaded near edges |
-| `geometry.ts` | Pure page math (column width, gap, stride, auto-spread rule) |
+| `geometry.ts` | Pure page math (column width, gap, stride) |
 | `styles.ts` | Reader CSS from settings (typography, themes, layout, highlight colors) |
 | `chapter-doc.ts` | Builds the iframe `srcdoc` (CSP meta, `<base>`, reader styles) |
 | `dom-locator.ts` | DOM ⇄ locator mapping, first-visible-character search, word snapping |
@@ -167,6 +167,14 @@ PDF.js runs with its worker, local CMaps/standard fonts/wasm decoders (copied to
 adds only `'wasm-unsafe-eval'` (image decoders), `worker-src 'self' blob:` and `connect-src justbook:`.
 In scroll mode pages render only near the viewport and canvases far away are released.
 PDF covers are rendered from page 1 by the library view and stored with `set_cover`.
+
+### Layouts
+
+The reader offers exactly three layouts, chosen by the user (toolbar layout menu or settings) and
+**never changed automatically** by window size or orientation: **Single page**, **Two pages**,
+**Scroll**. Internally they are `flow` (`paginated` | `scrolled`) + `spread` (`single` | `double`);
+settings saved by older versions ("auto") migrate to Single page. For PDFs and comics, Two pages still
+shows the cover and landscape (double-page) scans on their own, as printed books do.
 
 ### Position model
 

@@ -45,6 +45,12 @@ const check = (cond, label, extra = "") => {
   if (!cond) failures++;
 };
 const invoke = (cmd, args) => exec((c, a) => window.__TAURI_INTERNALS__.invoke(c, a), cmd, args ?? {});
+/** Choose a layout from the toolbar menu. */
+const layout = async (label) => {
+  await exec(() => document.querySelector('button[title="Layout"]').click());
+  await sleep(200);
+  await exec((l) => [...document.querySelectorAll(".layout-menu button")].find((b) => b.innerText.includes(l)).click(), label);
+};
 const pos = () => exec(() => document.querySelector(".pos")?.innerText ?? "");
 
 try {
@@ -77,11 +83,11 @@ try {
   check(!!p1, "progress persisted in SQLite", p1);
 
   // STEP 4: pages → scroll → pages keeps the locator.
-  await exec(() => document.querySelector('button[title="Switch to scrolling"]').click());
+  await layout("Scroll");
   await sleep(1800);
   await shot("w3-scroll.png");
   const p2 = (await invoke("open_book", { id: lantern.id })).progress?.locator;
-  await exec(() => document.querySelector('button[title="Switch to pages"]').click());
+  await layout("Single page");
   await sleep(1800);
   const p3 = (await invoke("open_book", { id: lantern.id })).progress?.locator;
   check(p1 === p2 && p2 === p3, "layout switches keep the exact locator", `${p1} → ${p2} → ${p3}`);

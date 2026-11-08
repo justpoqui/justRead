@@ -66,6 +66,11 @@ const pageNo = async () => {
   const m = /Page (\d+) of (\d+)/.exec(await posText());
   return m ? { page: +m[1], pages: +m[2] } : null;
 };
+/** Pick a layout from the toolbar's layout menu. */
+const layout = async (label) => {
+  await page.locator('button[title="Layout"]').click();
+  await page.locator(".layout-menu button", { hasText: label }).click();
+};
 const frameDoc = (fn, arg) =>
   page.evaluate(([src, a]) => {
     const f = document.querySelector(".host iframe");
@@ -98,13 +103,13 @@ try {
   check(!!L1 && L1.startsWith("f:0/"), "progress saved as a flow locator", L1);
 
   // STEP 6: switch to scroll mode and back — position must be identical.
-  await page.locator('button[title="Switch to scrolling"]').click();
+  await layout("Scroll");
   await page.waitForSelector(".jr-scroller");
   await settle(1200);
   const L2 = await saved();
   check(L2 === L1, "pages → scroll keeps the exact locator", `${L1} vs ${L2}`);
   await page.screenshot({ path: join(shots, "03-scroll.png") });
-  await page.locator('button[title="Switch to pages"]').click();
+  await layout("Single page");
   await settle(1200);
   check((await saved()) === L1, "scroll → pages returns to the same locator", await saved());
   check((await pageNo())?.page === 4, "…and the same page number", JSON.stringify(await pageNo()));
@@ -127,14 +132,30 @@ try {
   await page.locator('button[title="Reading settings"]').click();
   await page.screenshot({ path: join(shots, "04-font26.png") });
 
-  // STEP 8: wide window → automatic two-page spread.
-  // At 26px a spread needs ~24em per column, so make the window wide enough.
+  // STEP 8: layouts are exactly what the reader picks, whatever the window shape.
   await page.setViewportSize({ width: 1800, height: 900 });
+  await page.locator('button[title="Layout"]').click();
+  await page.screenshot({ path: join(shots, "05a-layout-menu.png"), clip: { x: 1300, y: 0, width: 500, height: 260 } });
+  await page.keyboard.press("Escape");
+  await layout("Two pages");
   await settle(1400);
-  const cols = await frameDoc((doc) => ({ col: parseFloat(getComputedStyle(doc.body).columnWidth), frame: doc.defaultView.innerWidth }));
+  const colInfo = () => frameDoc((doc) => ({ col: parseFloat(getComputedStyle(doc.body).columnWidth), frame: doc.defaultView.innerWidth }));
+  const cols = await colInfo();
   const p3 = await pageNo();
-  check((await saved()) === L1, "resize to spread keeps the locator", await saved());
-  check(cols.col < cols.frame / 2, "wide window shows a two-page spread", `column ${cols.col}px in frame ${cols.frame}px; ${p2.pages} → ${p3?.pages} screens`);
+  check((await saved()) === L1, "switching to two pages keeps the locator", await saved());
+  check(cols.col < cols.frame / 2, "Two pages shows two pages", `column ${cols.col}px in frame ${cols.frame}px; ${p2.pages} → ${p3?.pages} screens`);
+  await page.setViewportSize({ width: 700, height: 1000 });
+  await settle(1400);
+  const narrow = await colInfo();
+  check(narrow.col < narrow.frame / 2, "Two pages stays two pages in a narrow portrait window", JSON.stringify(narrow));
+  await page.setViewportSize({ width: 1800, height: 900 });
+  await layout("Single page");
+  await settle(1400);
+  const wideWin = await colInfo();
+  check(wideWin.col > wideWin.frame * 0.9, "Single page stays one page in a very wide window", JSON.stringify(wideWin));
+  check((await saved()) === L1, "…and every switch kept the locator", await saved());
+  await layout("Two pages");
+  await settle(1400);
   await page.screenshot({ path: join(shots, "05-spread.png") });
 
   // STEP 9: select text → highlight (also proves parent listeners work in the sandboxed iframe).
@@ -163,22 +184,22 @@ try {
   await page.screenshot({ path: join(shots, "06-highlight.png") });
 
   // STEP 10: highlight survives a layout switch (painted again in the new view).
-  await page.locator('button[title="Switch to scrolling"]').click();
+  await layout("Scroll");
   await settle(1200);
   const marksScroll = await page.evaluate(() => [...document.querySelectorAll(".jr-scroller iframe")].reduce((n, f) => n + f.contentDocument.querySelectorAll("mark.jr-hl").length, 0));
   check(marksScroll > 0, "highlight is repainted in scroll mode");
-  await page.locator('button[title="Switch to pages"]').click();
+  await layout("Two pages");
   await settle(1000);
 
   // STEP 10b: scrolling to the end of a chapter appends the next one.
-  await page.locator('button[title="Switch to scrolling"]').click();
+  await layout("Scroll");
   await settle(1000);
   await page.evaluate(() => { const s = document.querySelector(".jr-scroller"); s.scrollTop = s.scrollHeight; });
   await settle(1200);
   const sections = await page.locator(".jr-scroller section").count();
   check(sections >= 2, "scrolling near the end loads the next chapter", `sections=${sections}`);
   check((await saved()) !== L1, "scrolling away moves the saved position", await saved());
-  await page.locator('button[title="Switch to pages"]').click();
+  await layout("Two pages");
   await settle(1000);
 
   // STEP 11: bookmark with the keyboard.
@@ -258,16 +279,16 @@ try {
   await page.keyboard.press("ArrowRight");
   await settle();
   const pdfLoc = await page.evaluate(() => [...window.__jr.progress.entries()].find(([, v]) => v.locator.startsWith("p:"))?.[1].locator);
-  // At this width PDFs use the automatic spread: [1], [2–3], [4–5], …
+  // "Two pages" (chosen earlier) applies to PDFs too: [1], [2–3], [4–5], …
   check(/Pages 4–5 of 8/.test(await posText()) && pdfLoc === "p:3@0", "PDF spread page turns save a page locator", `${await posText()} ${pdfLoc}`);
 
   // STEP 18: PDF in scroll mode keeps the page, renders lazily, and returns.
-  await page.locator('button[title="Switch to scrolling"]').click();
+  await layout("Scroll");
   await settle(1200);
   const slots = await page.evaluate(() => ({ all: document.querySelectorAll(".jr-page").length, drawn: document.querySelectorAll(".jr-page canvas").length }));
   check(/Page 4 of 8/.test(await posText()), "PDF scroll mode opens at the same page", await posText());
   check(slots.all === 8 && slots.drawn >= 1 && slots.drawn < 8 + 1, "pages are placeholders until near the viewport", JSON.stringify(slots));
-  await page.locator('button[title="Switch to pages"]').click();
+  await layout("Two pages");
   await settle();
   check(/Pages 4–5 of 8/.test(await posText()), "…and back to the same spread in paginated mode", await posText());
 
@@ -280,10 +301,8 @@ try {
   check(/Pages 4–5 of 8/.test(await posText()) && (await page.evaluate(() => [...window.__jr.progress.values()].find((v) => v.locator.startsWith("p:"))?.locator)) === "p:4@0", "outline entry jumps to its page (page 5)", await posText());
 
   // STEP 20: zoom with the keyboard; fit-width via settings.
-  // Switch to single pages for the zoom/fit checks.
-  await page.locator('button[title="Reading settings"]').click();
-  await page.locator("select").filter({ hasText: "Automatic" }).selectOption("never");
-  await page.locator('button[title="Reading settings"]').click();
+  // Single pages for the zoom/fit checks.
+  await layout("Single page");
   await settle();
   const w0 = await page.evaluate(() => document.querySelector(".jr-page").getBoundingClientRect().width);
   await page.keyboard.press("+");
@@ -300,8 +319,8 @@ try {
   check(/Page 5 of 8/.test(await posText()), "fit change keeps the page", await posText());
   await page.screenshot({ path: join(shots, "10-pdf-fitwidth.png") });
   await page.locator("button", { hasText: "Fit page" }).click();
-  await page.locator("select").filter({ hasText: "Automatic" }).selectOption("auto");
   await page.locator('button[title="Reading settings"]').click();
+  await layout("Two pages");
   await settle();
 
   // STEP 21: bookmark a PDF page.

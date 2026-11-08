@@ -1,6 +1,6 @@
 <!-- Copyright 2026 The justRead Authors. SPDX-License-Identifier: Apache-2.0 -->
 <script lang="ts">
-  import { settings, saveSettings } from "../lib/settings/store.svelte";
+  import { settings, saveSettings, setLayout, currentLayout, LAYOUTS } from "../lib/settings/store.svelte";
   import { THEMES, type FontChoice, type ThemeId } from "../lib/settings/reader-settings";
 
   /** Fixed-layout books (PDF/comics) get fit & zoom instead of typography. */
@@ -29,21 +29,12 @@
 
 <section class="panel" aria-label="Reading settings">
   <h3>Layout</h3>
-  <div class="seg" role="radiogroup" aria-label="Layout">
-    <button role="radio" aria-checked={settings.flow === "paginated"} class:on={settings.flow === "paginated"}
-      onclick={() => ((settings.flow = "paginated"), saveSettings())}>Pages</button>
-    <button role="radio" aria-checked={settings.flow === "scrolled"} class:on={settings.flow === "scrolled"}
-      onclick={() => ((settings.flow = "scrolled"), saveSettings())}>Scroll</button>
+  <div class="seg three" role="radiogroup" aria-label="Layout">
+    {#each LAYOUTS as l (l.id)}
+      <button role="radio" aria-checked={currentLayout(settings) === l.id} class:on={currentLayout(settings) === l.id}
+        onclick={() => setLayout(l.id)}>{l.label}</button>
+    {/each}
   </div>
-  {#if settings.flow === "paginated"}
-    <label class="row">Two-page spread
-      <select bind:value={settings.spread} onchange={saveSettings}>
-        <option value="auto">Automatic (wide screens)</option>
-        <option value="always">Always</option>
-        <option value="never">Never</option>
-      </select>
-    </label>
-  {/if}
 
   <h3>Theme</h3>
   <div class="themes">
@@ -130,6 +121,9 @@
     border: 1px solid var(--border);
     border-radius: 8px;
     overflow: hidden;
+  }
+  .seg.three {
+    grid-template-columns: 1fr 1fr 1fr;
   }
   .seg button {
     border: 0;

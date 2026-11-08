@@ -45,7 +45,6 @@ export class PaginatedView implements View {
       hostHeight: this.ctx.host.clientHeight,
       margin: s.margin,
       spread: s.spread,
-      fontSize: s.fontSize,
     });
   }
 

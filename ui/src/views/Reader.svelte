@@ -16,7 +16,7 @@
   import { FixedEngine } from "../lib/fixed/fixed-engine";
   import { ImageSource, PdfSource } from "../lib/fixed/sources";
   import type { TocEntry } from "../lib/ipc/types";
-  import { settings, saveSettings } from "../lib/settings/store.svelte";
+  import { settings, saveSettings, setLayout, currentLayout, LAYOUTS } from "../lib/settings/store.svelte";
   import { toast } from "../lib/stores/toasts.svelte";
 
   let { id, onclose }: { id: string; onclose: () => void } = $props();
@@ -35,6 +35,8 @@
   let active = $state<{ annotation: Annotation; rect: DOMRect } | null>(null);
   let editing = $state<{ quote: string; initial: string; save: (note: string) => Promise<void> } | null>(null);
   let scrub = $state<number | null>(null);
+  let layoutMenu = $state(false);
+  const LAYOUT_ICONS = { single: "page", double: "pages", scroll: "scroll" } as const;
 
   const title = $derived(book?.book.title ?? "");
   const currentHref = $derived(
@@ -161,7 +163,8 @@
         void engine?.prev();
         break;
       case "Escape":
-        if (selection || active) {
+        if (layoutMenu) layoutMenu = false;
+        else if (selection || active) {
           selection = null;
           active = null;
           engine?.clearSelection();
@@ -310,10 +313,22 @@
       <button class="icon-btn" class:active={panel === "toc"} title="Contents" onclick={() => (panel = panel === "toc" ? null : "toc")}><Icon name="toc" /></button>
       <button class="icon-btn" class:active={panel === "notes"} title="Highlights & bookmarks" onclick={() => (panel = panel === "notes" ? null : "notes")}><Icon name="highlight" /></button>
       <button class="icon-btn" class:active={pageBookmarks.length > 0} title="Bookmark this page (B)" onclick={toggleBookmark}><Icon name="bookmark" filled={pageBookmarks.length > 0} /></button>
-      <button class="icon-btn" title={settings.flow === "paginated" ? "Switch to scrolling" : "Switch to pages"}
-        onclick={() => ((settings.flow = settings.flow === "paginated" ? "scrolled" : "paginated"), saveSettings())}>
-        <Icon name={settings.flow === "paginated" ? "scroll" : "pages"} />
-      </button>
+      <div class="layout-wrap">
+        <button class="icon-btn" class:active={layoutMenu} title="Layout" aria-haspopup="menu" aria-expanded={layoutMenu}
+          onclick={() => (layoutMenu = !layoutMenu)}>
+          <Icon name={LAYOUT_ICONS[currentLayout(settings)]} />
+        </button>
+        {#if layoutMenu}
+          <div class="layout-menu" role="menu">
+            {#each LAYOUTS as l (l.id)}
+              <button role="menuitemradio" aria-checked={currentLayout(settings) === l.id} class:on={currentLayout(settings) === l.id}
+                onclick={() => ((layoutMenu = false), setLayout(l.id))}>
+                <Icon name={LAYOUT_ICONS[l.id]} size={18} /> {l.label}
+              </button>
+            {/each}
+          </div>
+        {/if}
+      </div>
       <button class="icon-btn" class:active={panel === "settings"} title="Reading settings" onclick={() => (panel = panel === "settings" ? null : "settings")}><Icon name="type" /></button>
     </div>
   </header>
@@ -423,6 +438,41 @@
   .actions {
     display: flex;
     gap: 2px;
+  }
+  .layout-wrap {
+    position: relative;
+  }
+  .layout-menu {
+    position: absolute;
+    right: 0;
+    top: 40px;
+    z-index: 30;
+    display: flex;
+    flex-direction: column;
+    min-width: 170px;
+    padding: 6px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.18);
+  }
+  .layout-menu button {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    border: 0;
+    background: none;
+    padding: 8px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    text-align: left;
+  }
+  .layout-menu button:hover {
+    background: var(--panel);
+  }
+  .layout-menu button.on {
+    color: var(--accent);
+    font-weight: 600;
   }
   .stage {
     position: relative;

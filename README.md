@@ -13,7 +13,7 @@ An open-source, cross-platform ebook reader: part of the **just** suite.
 | | |
 |---|---|
 | Formats | EPUB 2/3, MOBI/AZW/PRC, AZW3 (KF8), FB2, DOCX, HTML, TXT, PDB; PDF; CBZ/CB7 comics. DRM-protected files are detected and refused with a clear message. |
-| Layouts | Single page, automatic/forced two-page spread, continuous scroll |
+| Layouts | Single page, two pages, or continuous scroll: always exactly what you choose |
 | Typography | Font family (system fonts or any installed font), size, line height, margins, justification, hyphenation, publisher-style toggle |
 | Themes | Light, sepia, dark, black, custom colors |
 | Library | Grid and list views, covers, search, sort by title/author/series/recently read/progress/date added, drag-and-drop import |

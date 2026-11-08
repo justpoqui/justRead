@@ -9,6 +9,28 @@ import { DEFAULT_SETTINGS, sanitizeSettings, type ReaderSettings } from "./reade
 
 export const settings: ReaderSettings = $state({ ...DEFAULT_SETTINGS });
 
+/** The three reading layouts, as offered in the UI. */
+export type LayoutChoice = "single" | "double" | "scroll";
+export const LAYOUTS: { id: LayoutChoice; label: string }[] = [
+  { id: "single", label: "Single page" },
+  { id: "double", label: "Two pages" },
+  { id: "scroll", label: "Scroll" },
+];
+
+export function currentLayout(s: { flow: string; spread: string }): LayoutChoice {
+  return s.flow === "scrolled" ? "scroll" : s.spread === "double" ? "double" : "single";
+}
+
+/** Apply a layout choice (kept as flow + spread internally). */
+export function setLayout(l: LayoutChoice): void {
+  if (l === "scroll") settings.flow = "scrolled";
+  else {
+    settings.flow = "paginated";
+    settings.spread = l;
+  }
+  saveSettings();
+}
+
 export interface LibraryPrefs {
   view: "grid" | "list";
   sort: "title" | "author" | "series" | "recent" | "progress" | "added";

@@ -128,11 +128,9 @@ export class FixedEngine implements Engine {
     return { width: Math.max(100, this.root.clientWidth - 32), height: Math.max(100, this.root.clientHeight - 32) };
   }
 
+  /** Two pages per screen exactly when the reader chose it (any window shape). */
   private spread(): boolean {
-    const s = this.settings.spread;
-    if (s === "never") return false;
-    if (s === "always") return true;
-    return this.host.clientWidth > this.host.clientHeight * 1.1 && this.host.clientWidth >= 900;
+    return this.settings.spread === "double";
   }
 
   private sizes(): Size[] {

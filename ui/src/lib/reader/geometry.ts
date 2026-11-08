@@ -29,19 +29,13 @@ export interface GeometryInput {
   hostWidth: number;
   hostHeight: number;
   margin: number;
-  spread: "auto" | "always" | "never";
-  /** Base font size in px; auto-spread needs room for comfortable lines. */
-  fontSize?: number;
+  /** The reader's choice; never overridden by window size or orientation. */
+  spread: "single" | "double";
 }
 
-/** Spreads only make sense on wide, landscape screens. */
+/** Two pages per screen exactly when the reader asked for it. */
 export function useSpread(i: GeometryInput): boolean {
-  if (i.spread === "always") return i.hostWidth >= 500;
-  if (i.spread === "never") return false;
-  // Auto: landscape, and each page still gets lines of roughly 45+ characters
-  // (about 24em; typographic guidance is 45–75 characters per line).
-  const column = (i.hostWidth - i.margin * 4) / 2;
-  return i.hostWidth > i.hostHeight * 1.1 && column >= (i.fontSize ?? 18) * 24;
+  return i.spread === "double";
 }
 
 export function computeGeometry(i: GeometryInput): Geometry {

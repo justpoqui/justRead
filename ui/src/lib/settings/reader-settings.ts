@@ -7,7 +7,8 @@
 export type FontChoice = "publisher" | "serif" | "sans" | "humanist" | "mono" | "custom";
 export type ThemeId = "light" | "sepia" | "dark" | "black" | "custom";
 export type FlowMode = "paginated" | "scrolled";
-export type SpreadMode = "auto" | "always" | "never";
+/** Pages per screen in paginated mode — always exactly what the reader chose. */
+export type SpreadMode = "single" | "double";
 
 export interface ReaderSettings {
   font: FontChoice;
@@ -47,7 +48,7 @@ export const DEFAULT_SETTINGS: ReaderSettings = {
   theme: "light",
   customColors: { background: "#1d2b2f", text: "#d9e4dd", link: "#8fc7b5" },
   flow: "paginated",
-  spread: "auto",
+  spread: "single",
   fit: "page",
   zoom: 1,
 };
@@ -92,7 +93,8 @@ export function sanitizeSettings(raw: unknown): ReaderSettings {
   if (!["publisher", "serif", "sans", "humanist", "mono", "custom"].includes(s.font)) s.font = DEFAULT_SETTINGS.font;
   if (!["light", "sepia", "dark", "black", "custom"].includes(s.theme)) s.theme = "light";
   if (!["paginated", "scrolled"].includes(s.flow)) s.flow = "paginated";
-  if (!["auto", "always", "never"].includes(s.spread)) s.spread = "auto";
+  // Older versions stored "auto"/"always"/"never"; only an explicit "always" meant two pages.
+  s.spread = (s.spread as string) === "double" || (s.spread as string) === "always" ? "double" : "single";
   if (!["page", "width"].includes(s.fit)) s.fit = "page";
   s.zoom = clamp(s.zoom, 0.5, 5, 1);
   // A custom font name is inserted into CSS: allow only safe characters.

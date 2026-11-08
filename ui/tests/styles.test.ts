@@ -10,7 +10,7 @@ import { bookmarksInRange } from "../src/lib/reader/bookmarks";
 import type { Annotation } from "../src/lib/ipc/types";
 
 describe("reader CSS", () => {
-  const g = computeGeometry({ hostWidth: 1200, hostHeight: 800, margin: 40, spread: "never" });
+  const g = computeGeometry({ hostWidth: 1200, hostHeight: 800, margin: 40, spread: "single" });
 
   it("paginates with columns matching the geometry", () => {
     const css = readerCss(DEFAULT_SETTINGS, { kind: "paginated", geometry: g });
@@ -42,6 +42,9 @@ describe("settings sanitizing", () => {
     expect(s.customFont).not.toMatch(/[";{}:]/);
     expect(s.customColors.background).toBe(DEFAULT_SETTINGS.customColors.background);
     expect(sanitizeSettings(null)).toEqual(DEFAULT_SETTINGS);
+    // Older "automatic" layouts become single page; an explicit "always" stays two pages.
+    expect(sanitizeSettings({ spread: "auto" }).spread).toBe("single");
+    expect(sanitizeSettings({ spread: "always" }).spread).toBe("double");
   });
 });
 
