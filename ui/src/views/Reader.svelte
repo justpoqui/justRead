@@ -36,6 +36,8 @@
   let editing = $state<{ quote: string; initial: string; save: (note: string) => Promise<void> } | null>(null);
   let scrub = $state<number | null>(null);
   let layoutMenu = $state(false);
+  /** Touch screens (phones/tablets): the OS adds its own selection toolbar. */
+  const touch = typeof matchMedia !== "undefined" && matchMedia("(pointer: coarse)").matches;
   const LAYOUT_ICONS = { single: "page", double: "pages", scroll: "scroll" } as const;
 
   const title = $derived(book?.book.title ?? "");
@@ -383,7 +385,8 @@
   </footer>
 
   {#if selection}
-    <SelectionMenu rect={selection.rect} oncolor={(c) => createHighlight(c)} onnote={noteForSelection} oncopy={copySelection} />
+    <!-- Phones show their own Copy/Share bar for selections, so ours omits Copy there. -->
+    <SelectionMenu rect={selection.rect} oncolor={(c) => createHighlight(c)} onnote={noteForSelection} oncopy={touch ? undefined : copySelection} />
   {/if}
   {#if active}
     {@const a = active.annotation}
@@ -406,14 +409,36 @@
     align-items: center;
     gap: 10px;
     padding: 6px 10px;
-    transition: opacity 0.2s;
   }
-  .hide-chrome .bar {
+  .top,
+  .progress,
+  .pos {
+    transition: opacity 0.2s, visibility 0.2s;
+  }
+  /* Hidden chrome: the toolbar and slider go away; the page / % line stays, faintly. */
+  .hide-chrome .top,
+  .hide-chrome .progress {
     opacity: 0;
   }
-  .hide-chrome .bar:hover,
-  .hide-chrome .bar:focus-within {
-    opacity: 1;
+  .hide-chrome .pos {
+    opacity: 0.55;
+  }
+  /* Touch screens: hidden controls must not react to taps (a tap in the middle brings them back). */
+  @media (hover: none) {
+    .hide-chrome .top,
+    .hide-chrome .progress {
+      visibility: hidden;
+      pointer-events: none;
+    }
+  }
+  /* Mouse: hovering a hidden bar reveals it. */
+  @media (hover: hover) {
+    .hide-chrome .top:hover,
+    .hide-chrome .top:focus-within,
+    .hide-chrome .bottom:hover .progress,
+    .hide-chrome .progress:focus {
+      opacity: 1;
+    }
   }
   .titles {
     flex: 1;

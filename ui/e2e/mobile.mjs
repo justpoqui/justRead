@@ -125,9 +125,40 @@ try {
   });
   await page.waitForSelector(".menu", { timeout: 3000 }).catch(() => {});
   check((await page.locator(".menu").count()) === 1, "touch selection shows the highlight menu");
+  // The phone's own Copy/Share bar sits above the selection: ours goes below and has no Copy.
+  const selBottom = await page.evaluate(() => {
+    const f = document.querySelector(".host iframe");
+    const r = f.contentDocument.getSelection().getRangeAt(0).getBoundingClientRect();
+    return f.getBoundingClientRect().top + r.bottom;
+  });
+  const menuBox = await page.locator(".menu").boundingBox();
+  check(menuBox.y > selBottom, "on touch, our menu sits below the selection (clear of the system bar)", `menu ${Math.round(menuBox.y)} > selection ${Math.round(selBottom)}`);
+  check((await page.locator('.menu button[title="Copy"]').count()) === 0, "no duplicate Copy button on touch (the system bar has it)");
   await page.screenshot({ path: join(shots, "m3-selection.png") });
   await page.evaluate(() => document.querySelector(".host iframe").contentDocument.getSelection().removeAllRanges());
   await settle(600);
+
+  // STEP 5b: tapping the middle hides the bars; hidden controls ignore taps; page / % stays.
+  await page.touchscreen.tap(vp.width / 2, vp.height / 2);
+  await settle(500);
+  const hidden = await page.evaluate(() => {
+    const btn = document.querySelector('button[title="Contents"]');
+    const r = btn.getBoundingClientRect();
+    const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+    const pos = document.querySelector(".pos");
+    return {
+      topVisibility: getComputedStyle(document.querySelector(".top")).visibility,
+      hitsButton: !!hit && (hit === btn || btn.contains(hit)),
+      posOpacity: Number(getComputedStyle(pos).opacity),
+      posText: pos.innerText,
+    };
+  });
+  check(hidden.topVisibility === "hidden" && !hidden.hitsButton, "hidden toolbar buttons can't be tapped", JSON.stringify(hidden));
+  check(hidden.posOpacity > 0.3 && /Page \d+ of/.test(hidden.posText), "page / % stays visible while the bars are hidden", JSON.stringify(hidden));
+  await page.screenshot({ path: join(shots, "m3b-hidden-chrome.png") });
+  await page.touchscreen.tap(vp.width / 2, vp.height / 2);
+  await settle(500);
+  check(await page.evaluate(() => getComputedStyle(document.querySelector(".top")).visibility === "visible"), "tapping the middle again brings the bars back");
 
   // STEP 6: panels are bottom sheets.
   await page.locator('button[title="Reading settings"]').click();

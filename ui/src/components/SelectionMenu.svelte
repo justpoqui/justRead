@@ -22,8 +22,20 @@
     ondelete?: () => void;
   } = $props();
 
-  // Place above the selection when there is room, otherwise below; keep on screen.
-  const top = $derived(rect.top > 64 ? rect.top - 52 : rect.bottom + 10);
+  // Mouse: above the selection when there is room, otherwise below.
+  // Touch: the phone's own Copy/Share bar appears *above* the selection, so ours
+  // goes below it (or well above if the selection is near the bottom of the screen).
+  const touch = typeof matchMedia !== "undefined" && matchMedia("(pointer: coarse)").matches;
+  const MENU_H = 52;
+  const top = $derived(
+    touch
+      ? rect.bottom + 16 + MENU_H < window.innerHeight
+        ? rect.bottom + 16
+        : Math.max(8, rect.top - MENU_H - 72)
+      : rect.top > 64
+        ? rect.top - MENU_H
+        : rect.bottom + 10,
+  );
   const left = $derived(Math.max(8, Math.min(window.innerWidth - 300, rect.left + rect.width / 2 - 140)));
   const colors = [...Object.keys(HIGHLIGHT_COLORS), "underline"];
 </script>
