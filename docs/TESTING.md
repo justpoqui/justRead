@@ -9,7 +9,21 @@
 | E2E (WebKitGTK) | see below | the real desktop app (Rust backend + WebKitGTK) via WebDriver with native input |
 
 Fixtures are generated (`scripts/make-sample-epub.py`, `scripts/make-sample-fixed.py`, in-test
-EPUB/PDF/CBZ/CB7 builders), never third-party books.
+EPUB/PDF/CBZ/CB7/MOBI/KF8/DOCX/FB2/HTML builders), never third-party books.
+
+**Optional real-world check (not part of CI).** To exercise the Phase 4 adapters on files produced by
+another tool, convert the generated sample EPUB with Calibre's `ebook-convert` (installed from the OS
+package manager and used only as an external generator; nothing from it is committed or linked):
+
+```sh
+ebook-convert /tmp/sample.epub /tmp/t-azw3.azw3 --title "Lantern (AZW3)"
+ebook-convert /tmp/sample.epub /tmp/t-mobi.mobi --mobi-file-type old --title "Lantern (MOBI)"
+ebook-convert /tmp/sample.epub /tmp/t-fb2.fb2 --title "Lantern (FB2)"
+ebook-convert /tmp/sample.epub /tmp/t-docx.docx --title "Lantern (DOCX)"
+cargo run -p justread-library --example import -- /tmp/jr-lib /tmp/t-*.*
+```
+The Chromium suite then also checks that each of these renders text and images and that its 6-chapter
+TOC navigates.
 
 ## End-to-end
 

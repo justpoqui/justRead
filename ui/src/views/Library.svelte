@@ -177,7 +177,7 @@
         {:else}
           <Icon name="book" size={48} />
           <h2>Your library is empty</h2>
-          <p>Import EPUB, PDF, TXT or comic (CBZ/CB7) files, or drop them anywhere on this window.</p>
+          <p>Import EPUB, MOBI/AZW3, FB2, DOCX, HTML, TXT, PDF or comic (CBZ/CB7) files, or drop them anywhere on this window.</p>
           <button class="btn primary" onclick={pickFiles}><Icon name="plus" size={16} /> Import books</button>
         {/if}
       </div>

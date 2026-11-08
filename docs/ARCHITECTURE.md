@@ -1,6 +1,6 @@
 # justRead architecture
 
-_Last updated: Phase 3 complete._
+_Last updated: Phase 4 complete (DjVu pending a decision)._
 
 ## Overview
 
@@ -22,7 +22,8 @@ _Last updated: Phase 3 complete._
 │  justread-library ── SQLite (books, progress, annotations, settings)                    │
 │        │ import pipeline                                                                │
 │        ▼                                                                                │
-│  justread-formats ── Registry ── Epub | Txt | Pdf | Cbz | Cb7 | Cbr (FormatAdapter)      │
+│  justread-formats ── Registry ── Epub Txt Pdf Cbz Cb7 Cbr Mobi Fb2 Docx Html (adapters)  │
+│        └─ htmlbook: generated HTML → normalize/split → justBook (MOBI/AZW3/FB2/DOCX/HTML)│
 │        │ normalize on import                                                            │
 │        ▼                                                                                │
 │  justbook ── package writer / manifest / ChapterWriter  →  <data>/books/<uuid>/         │
@@ -76,6 +77,25 @@ NCX) → each spine document through `html::normalize` → cover.
 **Normalizer** (`justread-formats/src/html.rs`): lenient quick-xml event loop; allow-listed elements and
 attributes; scripts/forms/embeds removed; unknown elements unwrapped; links and resources rewritten to
 package paths; `<style>`/`<link>` collected; output through `ChapterWriter`.
+
+**Generated-HTML pipelines** (Phase 4, `htmlbook.rs`): MOBI/AZW3, FB2, DOCX and HTML adapters
+translate their input into *virtual* HTML documents + resources + a TOC; `write_html_book` then
+normalizes them with the same sanitizer as EPUB, **splits long documents** between top-level blocks
+(`NormalizeOptions::split_chars`, ~60k UTF-16 units per chapter) and resolves **deferred internal
+links** once every chapter and anchor id is known (a target may land in a split part).
+
+* **MOBI 6 / AZW / PRC** (`mobi/`): Palm database → MOBI/EXTH headers → text records (trailing entries
+  stripped; PalmDOC LZ77 or HUFF/CDIC) → `filepos` byte offsets become anchors, `<mbp:pagebreak>`
+  splits chapters, `recindex` images become resources; NCX index → TOC. Encrypted books are refused.
+* **AZW3 / KF8** (also the KF8 half of combo `.mobi` files): FDST flows, SKEL/FRAG indexes rebuild
+  each HTML file, `kindle:pos|embed|flow` URLs become anchors/images/CSS; NCX → TOC.
+* **PDB** (PalmDOC `TEXtREAd`): plain text through the TXT heuristics.
+* **FB2 / FB2.ZIP** (`fb2.rs`): one chapter per top-level section; titles, epigraphs, poems, notes
+  (separate chapter, links resolved across chapters), base64 images, series metadata.
+* **DOCX** (`docx.rs`): headings from styles/outline levels (chapters split at the top level used),
+  lists, tables, inline formatting, hyperlinks, bookmarks, images, footnotes.
+* **HTML** (`htmlfile.rs`): local images/CSS imported only from the page's own folder.
+* **Recognized, not opened**: DjVu (adr/0007), KFX (DRM'd or undocumented), CBR (adr/0006).
 
 **Fixed-layout pipelines** (Phase 3) produce `layout: "fixed"` packages with a `fixed` section
 (docs/JUSTBOOK_SPEC.md):
@@ -176,8 +196,8 @@ languages, and end-to-end runs in Chromium (mocked IPC) and in the real app on W
 | 1 | Scaffold, SQLite library, EPUB + TXT → justBook, single page + scroll, themes & fonts, desktop | ✅ done |
 | 2 | Two-page spread, highlights/notes/bookmarks, position persistence across layouts | ✅ done |
 | 3 | PDF (PDF.js) and comics (CBZ/CB7; CBR pending license decision) | ✅ done |
-| 4 | MOBI, AZW3, FB2, HTML, DOCX adapters; DjVu | next |
-| 5 | justBrowse (privacy-hardened browser) | |
+| 4 | MOBI, AZW3, FB2, HTML, DOCX adapters; DjVu | ✅ done, except DjVu (decision pending, adr/0007) |
+| 5 | justBrowse (privacy-hardened browser) | next |
 | 6 | Android and iOS | |
 | 7 | Markdown highlight export / JustNotes | |
 
@@ -190,6 +210,8 @@ languages, and end-to-end runs in Chromium (mocked IPC) and in the real app on W
 * MathML is unwrapped to text; audio/video are dropped.
 * PDFs: no text selection, highlights or search yet (bookmarks work); highlights need the PDF.js text
   layer (later). Annotations in fixed books are bookmarks only.
+* HUFF/CDIC-compressed MOBI is covered by a synthetic test only (no real sample available offline).
+* DOCX: EMF/WMF images, text boxes, comments and tracked changes are not converted.
 * CBR import awaits a decision on the unRAR license (adr/0006).
 * Folder watch import is deferred (see open questions in the Phase 1 plan).
 * Imports hold the library lock while converting; very large batches block other commands until done.

@@ -10,14 +10,21 @@
 //! [`Registry::with_defaults`]; nothing else in the app changes.
 
 pub mod archive;
+pub mod base64;
 pub mod comic;
 pub mod css;
+pub mod docx;
 pub mod entities;
 pub mod epub;
+pub mod fb2;
 pub mod html;
+pub mod htmlbook;
+pub mod htmlfile;
 pub mod images;
+pub mod mobi;
 pub mod pdf;
 pub mod txt;
+pub mod unsupported;
 
 use std::fs::File;
 use std::io::Read;
@@ -154,13 +161,22 @@ impl Registry {
                 Box::new(comic::CbzAdapter),
                 Box::new(comic::Cb7Adapter),
                 Box::new(comic::CbrAdapter),
+                Box::new(mobi::MobiAdapter),
+                Box::new(fb2::Fb2Adapter),
+                Box::new(docx::DocxAdapter),
+                Box::new(htmlfile::HtmlAdapter),
+                Box::new(unsupported::DjvuAdapter),
+                Box::new(unsupported::KfxAdapter),
             ],
         }
     }
 
     /// Lower-case extensions accepted by the file picker.
     pub fn extensions(&self) -> Vec<&'static str> {
-        vec!["epub", "txt", "pdf", "cbz", "cb7", "cbr"]
+        vec![
+            "epub", "mobi", "azw", "azw3", "prc", "pdb", "fb2", "zip", "docx", "html", "htm",
+            "xhtml", "txt", "pdf", "cbz", "cb7", "cbr", "djvu", "kfx",
+        ]
     }
 
     /// Pick the adapter with the highest confidence for `path`.

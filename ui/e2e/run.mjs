@@ -76,7 +76,7 @@ try {
   // STEP 3: library.
   await page.goto("http://localhost:5174/e2e/index.html");
   await page.waitForSelector(".card");
-  check((await page.locator(".card").count()) === 4, "library lists all imported books (EPUB, TXT, PDF, CBZ)");
+  check((await page.locator(".card").count()) === 8, "library lists all imported books (EPUB, TXT, PDF, CBZ, AZW3, MOBI, FB2, DOCX)");
   await page.screenshot({ path: join(shots, "01-library.png") });
 
   // STEP 4: open the EPUB; paginated by default.
@@ -327,6 +327,32 @@ try {
   await settle(600);
   const wide = await page.evaluate(() => { const i = document.querySelector(".jr-page img"); return { pages: document.querySelectorAll(".jr-page").length, w: i.naturalWidth, h: i.naturalHeight }; });
   check(wide.pages === 1 && wide.w > wide.h, "the landscape double page stands alone", JSON.stringify(wide));
+
+  // ===== Phase 4: MOBI / AZW3 / FB2 / DOCX (generated from the sample EPUB) =====
+  await page.setViewportSize({ width: 1000, height: 760 });
+  for (const fmt of ["AZW3", "MOBI", "FB2", "DOCX"]) {
+    await page.locator('button[title="Back to library (Esc)"]').click();
+    await page.waitForSelector(".card");
+    await page.locator(".card", { hasText: `Lantern (${fmt})` }).click();
+    await page.waitForFunction(() => document.querySelector(".host iframe")?.contentDocument?.querySelector("[data-jrb]"), null, { timeout: 10000 });
+    await settle();
+    // Go to Chapter 1 through the TOC (some formats start with a cover or a TOC page).
+    await page.locator('button[title="Contents"]').click();
+    const tocTitles = await page.locator(".side button").allInnerTexts();
+    await page.locator(".side button", { hasText: "Chapter 1" }).click();
+    await settle();
+    const info = await frameDoc((doc) => {
+      const img = [...doc.querySelectorAll("img")].find((i) => i.naturalWidth === 240);
+      return { text: doc.body.textContent.includes("Chapter 1"), img: img ? img.naturalWidth : -1 };
+    });
+    await page.locator('button[title="Contents"]').click();
+    await page.locator(".side button", { hasText: "Chapter 3" }).click();
+    await settle();
+    const ch3 = await frameDoc((doc) => doc.body.textContent.includes("This is the paragraph the link in chapter one points to"));
+    check(info.text && info.img > 0 && tocTitles.filter((t) => /^Chapter \d$/.test(t)).length === 6 && ch3,
+      `${fmt}: renders text and images, 6-chapter TOC navigates`, JSON.stringify({ ...info, toc: tocTitles.length, ch3 }));
+    if (fmt === "AZW3") await page.screenshot({ path: join(shots, "11-azw3.png") });
+  }
 
   check(errors.length === 0, "no page errors", errors.slice(0, 3).join(" | "));
 } catch (e) {

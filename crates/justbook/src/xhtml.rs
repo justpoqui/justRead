@@ -203,6 +203,19 @@ impl ChapterWriter {
         }
     }
 
+    /// Number of currently open elements (0 = directly inside `<body>`).
+    pub fn depth(&self) -> usize {
+        self.stack.len()
+    }
+
+    /// A fresh writer with the same `<body>` attributes (used when splitting
+    /// one long source document into several chapters).
+    pub fn sibling(&self) -> Self {
+        let mut w = Self::new();
+        w.body_attrs = self.body_attrs.clone();
+        w
+    }
+
     /// Is an element called `name` currently open?
     pub fn is_open(&self, name: &str) -> bool {
         self.stack.iter().any(|n| n == name)

@@ -6,13 +6,13 @@ An open-source, cross-platform ebook reader: part of the **just** suite.
 * **Your books, any layout.** Paginated, two-page spread or continuous scroll; switch at any time without losing your place.
 * **Apache-2.0**, written from scratch.
 
-> Status: Phase 1 (desktop reader, EPUB + TXT) and Phase 2 (spreads, highlights, notes, bookmarks, position persistence) are implemented. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#roadmap).
+> Status: Phases 1–4 are implemented: desktop reader; spreads, highlights, notes, bookmarks; PDF and comics; MOBI/AZW3/FB2/DOCX/HTML. DjVu and CBR await licensing decisions. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#roadmap).
 
 ## Features (today)
 
 | | |
 |---|---|
-| Formats | EPUB 2/3 (DRM-free), TXT. DRM-protected files are detected and refused with a clear message. |
+| Formats | EPUB 2/3, MOBI/AZW/PRC, AZW3 (KF8), FB2, DOCX, HTML, TXT, PDB; PDF; CBZ/CB7 comics. DRM-protected files are detected and refused with a clear message. |
 | Layouts | Single page, automatic/forced two-page spread, continuous scroll |
 | Typography | Font family (system fonts or any installed font), size, line height, margins, justification, hyphenation, publisher-style toggle |
 | Themes | Light, sepia, dark, black, custom colors |

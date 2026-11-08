@@ -152,6 +152,30 @@ pub struct Normalized {
     pub warnings: Vec<String>,
 }
 
+/// Extra behavior used by converters that build books from generated HTML.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct NormalizeOptions {
+    /// Start a new chapter between top-level blocks once this many UTF-16
+    /// units have been written (keeps pagination fast for huge documents).
+    pub split_chars: Option<u64>,
+    /// Emit internal links as placeholders (see [`LINK_HREF`]) to be resolved
+    /// once every chapter and anchor id is known.
+    pub defer_links: bool,
+}
+
+/// Placeholder prefixes written by `defer_links`; the value between the
+/// prefix and [`LINK_END`] is `<resolved source path>#<fragment>`.
+pub const LINK_HREF: &str = "@@JRH:";
+pub const LINK_PKG: &str = "@@JRP:";
+pub const LINK_END: &str = "@@";
+
+/// One output chapter of [`normalize_parts`].
+pub struct Part {
+    pub normalized: Normalized,
+    /// `id` attributes that ended up in this part (link targets).
+    pub ids: Vec<String>,
+}
+
 /// What text events are currently feeding, besides the body.
 #[derive(PartialEq)]
 enum Capture {
@@ -163,6 +187,18 @@ enum Capture {
 /// Normalize `source` (already decoded to UTF-8). `title_hint` (usually
 /// from the TOC) becomes the chapter's `<title>` when given.
 pub fn normalize(source: &str, ctx: &LinkContext<'_>, title_hint: Option<&str>) -> Normalized {
+    let mut parts = normalize_parts(source, ctx, title_hint, NormalizeOptions::default());
+    parts.remove(0).normalized
+}
+
+/// Like [`normalize`], optionally splitting into several chapters and
+/// deferring link resolution. Always returns at least one part.
+pub fn normalize_parts(
+    source: &str,
+    ctx: &LinkContext<'_>,
+    title_hint: Option<&str>,
+    opts: NormalizeOptions,
+) -> Vec<Part> {
     // STEP 1: configure a forgiving parser.
     let mut reader = Reader::from_str(source);
     {
@@ -187,6 +223,9 @@ pub fn normalize(source: &str, ctx: &LinkContext<'_>, title_hint: Option<&str>) 
     let mut svg_depth = 0usize;
     let mut in_head = false;
     let mut seen_body = false;
+    // Finished parts (writer, first heading, ids) and the ids of the current one.
+    let mut done: Vec<(ChapterWriter, Option<String>, Vec<String>)> = Vec::new();
+    let mut ids: Vec<String> = Vec::new();
 
     // STEP 3: walk events.
     loop {
@@ -214,6 +253,27 @@ pub fn normalize(source: &str, ctx: &LinkContext<'_>, title_hint: Option<&str>) 
                         skip_depth += 1;
                     }
                     continue;
+                }
+
+                // Split between top-level blocks once the chapter is long enough.
+                if let Some(limit) = opts.split_chars {
+                    if seen_body
+                        && !in_head
+                        && w.depth() == 0
+                        && svg_depth == 0
+                        && w.stats().chars >= limit
+                    {
+                        let next = w.sibling();
+                        done.push((
+                            std::mem::replace(&mut w, next),
+                            first_heading.take(),
+                            std::mem::take(&mut ids),
+                        ));
+                        heading = None;
+                    }
+                }
+                if let Some(id) = attr(e, "id") {
+                    ids.push(id);
                 }
 
                 match name.as_str() {
@@ -272,7 +332,7 @@ pub fn normalize(source: &str, ctx: &LinkContext<'_>, title_hint: Option<&str>) 
                         let mut attrs = html_attrs(e, mapped);
                         if mapped == "a" {
                             if let Some(href) = attr(e, "href") {
-                                attrs.extend(rewrite_link(&href, ctx));
+                                attrs.extend(rewrite_link(&href, ctx, opts.defer_links));
                             }
                         }
                         if mapped == "img" {
@@ -398,26 +458,46 @@ pub fn normalize(source: &str, ctx: &LinkContext<'_>, title_hint: Option<&str>) 
         .map(|pkg| relative_path(ctx.out_path, &pkg))
         .collect();
 
-    // STEP 5: assemble the document.
+    // STEP 5: assemble every part with the same head (title, language, styles).
     let head_title = Some(collapse_ws(&head_title)).filter(|t| !t.is_empty());
-    let title = title_hint
-        .map(str::to_string)
-        .or_else(|| head_title.clone())
-        .unwrap_or_default();
     let css = scrub_stylesheet(&inline_css);
-    let (xhtml, stats) = w.finish(
-        &title,
-        lang.as_deref().or(ctx.default_lang),
-        &links,
-        Some(&css),
-    );
-    Normalized {
-        xhtml,
-        stats,
-        head_title,
-        first_heading,
-        warnings,
-    }
+    done.push((w, first_heading, ids));
+    let count = done.len();
+    done.into_iter()
+        .enumerate()
+        .map(|(i, (writer, heading, ids))| {
+            // Later parts are titled by their own first heading when they have one.
+            let title = if i == 0 {
+                title_hint
+                    .map(str::to_string)
+                    .or_else(|| head_title.clone())
+            } else {
+                heading.clone()
+            }
+            .or_else(|| title_hint.map(str::to_string))
+            .unwrap_or_default();
+            let (xhtml, stats) = writer.finish(
+                &title,
+                lang.as_deref().or(ctx.default_lang),
+                &links,
+                Some(&css),
+            );
+            Part {
+                normalized: Normalized {
+                    xhtml,
+                    stats,
+                    head_title: head_title.clone(),
+                    first_heading: heading,
+                    warnings: if i + 1 == count {
+                        warnings.clone()
+                    } else {
+                        vec![]
+                    },
+                },
+                ids,
+            }
+        })
+        .collect()
 }
 
 /// Route one run of text to wherever the parser state says it belongs.
@@ -542,10 +622,25 @@ fn svg_attrs(e: &BytesStart<'_>, ctx: &LinkContext<'_>) -> Vec<(String, String)>
 /// * external web/mail → kept, marked `data-jr-external` (the reader never
 ///   navigates the reading view to the web)
 /// * anything else (javascript:, unknown targets) → dropped
-fn rewrite_link(href: &str, ctx: &LinkContext<'_>) -> Vec<(String, String)> {
+fn rewrite_link(href: &str, ctx: &LinkContext<'_>, defer: bool) -> Vec<(String, String)> {
     let href = href.trim();
     if href.is_empty() {
         return vec![];
+    }
+
+    // STEP 0: deferred mode — record the resolved target, decide later.
+    if defer && !is_external(href) {
+        let Ok(resolved) = resolve_reference(ctx.source_path, href) else {
+            return vec![];
+        };
+        let target = format!("{resolved}#{}", fragment(href).unwrap_or(""));
+        return vec![
+            ("href".into(), format!("{LINK_HREF}{target}{LINK_END}")),
+            (
+                "data-jr-href".into(),
+                format!("{LINK_PKG}{target}{LINK_END}"),
+            ),
+        ];
     }
 
     // STEP 1: same-document fragment.
@@ -622,6 +717,47 @@ mod tests {
             default_lang: None,
         };
         normalize(src, &ctx, None)
+    }
+
+    #[test]
+    fn splits_long_documents_between_top_level_blocks() {
+        // STEP 1: 30 paragraphs of 100 chars, split every ~1000 chars, one link and one id.
+        let para = "x".repeat(100);
+        let mut src = String::from(r##"<html><body><p><a href="#far">jump</a></p>"##);
+        for i in 0..30 {
+            src.push_str(&format!("<div><p id=\"p{i}\">{para}</p></div>"));
+        }
+        src.push_str(r#"<p id="far">end</p></body></html>"#);
+        let map = |_: &str| None;
+        let ctx = LinkContext {
+            source_path: "doc.html",
+            out_path: "content/c0001.xhtml",
+            map: &map,
+            default_lang: None,
+        };
+        let parts = normalize_parts(
+            &src,
+            &ctx,
+            Some("T"),
+            NormalizeOptions {
+                split_chars: Some(1000),
+                defer_links: true,
+            },
+        );
+
+        // STEP 2: several parts, each restarting block numbering and never cutting a <div>.
+        assert!(parts.len() >= 3, "{}", parts.len());
+        for p in &parts {
+            assert!(p.normalized.xhtml.contains(r#"<body data-jrb="0">"#));
+            assert_eq!(
+                p.normalized.xhtml.matches("<div").count(),
+                p.normalized.xhtml.matches("</div>").count()
+            );
+        }
+        // STEP 3: the link is a placeholder; the target id lives in the last part.
+        assert!(parts[0].normalized.xhtml.contains("@@JRH:doc.html#far@@"));
+        assert!(parts.last().unwrap().ids.contains(&"far".to_string()));
+        assert_eq!(parts.iter().map(|p| p.ids.len()).sum::<usize>(), 31);
     }
 
     #[test]
