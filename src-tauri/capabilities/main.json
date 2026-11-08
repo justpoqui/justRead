@@ -1,0 +1,28 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "main",
+  "description": "The reading UI. Gets the library commands, the open-file dialog and basic window/event access — nothing else (no fs, shell, http or opener plugins).",
+  "windows": ["main"],
+  "permissions": [
+    "core:app:default",
+    "core:event:default",
+    "core:window:default",
+    "core:window:allow-set-title",
+    "core:webview:default",
+    "dialog:allow-open",
+    "allow-supported-extensions",
+    "allow-list-books",
+    "allow-get-book",
+    "allow-import-books",
+    "allow-delete-book",
+    "allow-open-book",
+    "allow-read-chapter",
+    "allow-save-progress",
+    "allow-get-setting",
+    "allow-set-setting",
+    "allow-list-annotations",
+    "allow-add-annotation",
+    "allow-update-annotation",
+    "allow-delete-annotation"
+  ]
+}

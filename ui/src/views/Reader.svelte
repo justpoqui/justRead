@@ -1,0 +1,427 @@
+<!-- Copyright 2026 The justRead Authors. SPDX-License-Identifier: Apache-2.0 -->
+<script lang="ts">
+  import { onMount } from "svelte";
+  import { getCurrentWindow } from "@tauri-apps/api/window";
+  import Icon from "../components/Icon.svelte";
+  import SettingsPanel from "../components/SettingsPanel.svelte";
+  import TocPanel from "../components/TocPanel.svelte";
+  import AnnotationsPanel from "../components/AnnotationsPanel.svelte";
+  import SelectionMenu from "../components/SelectionMenu.svelte";
+  import NoteEditor from "../components/NoteEditor.svelte";
+  import { api, packageUrl } from "../lib/ipc/api";
+  import type { Annotation, OpenedBook } from "../lib/ipc/types";
+  import { ReaderEngine, type RelocateEvent, type SelectionEvent } from "../lib/reader/engine";
+  import { formatLocator } from "../lib/reader/locator";
+  import { bookmarksInRange } from "../lib/reader/bookmarks";
+  import { settings, saveSettings } from "../lib/settings/store.svelte";
+  import { toast } from "../lib/stores/toasts.svelte";
+
+  let { id, onclose }: { id: string; onclose: () => void } = $props();
+
+  let host = $state<HTMLDivElement | undefined>();
+  let book = $state<OpenedBook | null>(null);
+  let engine: ReaderEngine | null = null;
+  let where = $state<RelocateEvent | null>(null);
+  let annotations = $state<Annotation[]>([]);
+  let panel = $state<"toc" | "notes" | "settings" | null>(null);
+  let chrome = $state(true);
+  let selection = $state<SelectionEvent | null>(null);
+  let active = $state<{ annotation: Annotation; rect: DOMRect } | null>(null);
+  let editing = $state<{ quote: string; initial: string; save: (note: string) => Promise<void> } | null>(null);
+  let scrub = $state<number | null>(null);
+
+  const title = $derived(book?.book.title ?? "");
+  const currentHref = $derived(where && book ? book.manifest.spine[where.spine]?.href ?? null : null);
+  const pageBookmarks = $derived(bookmarksInRange(annotations, where?.range ?? null));
+
+  // STEP 1: open the book, then create the engine at the saved position.
+  onMount(() => {
+    let saveTimer: ReturnType<typeof setTimeout> | undefined;
+    let disposed = false;
+
+    (async () => {
+      try {
+        book = await api.openBook(id);
+        annotations = await api.listAnnotations(id);
+        void getCurrentWindow().setTitle(`${book.book.title} — justRead`);
+        if (disposed || !host) return;
+
+        engine = new ReaderEngine({
+          host,
+          manifest: book.manifest,
+          settings: $state.snapshot(settings),
+          loadChapter: (href) => api.readChapter(id, href),
+          contentBase: packageUrl(id, "content/"),
+        });
+        engine.setAnnotations($state.snapshot(annotations));
+
+        // STEP 2: wire engine events to UI state.
+        engine.on("relocate", (e) => {
+          where = e;
+          clearTimeout(saveTimer);
+          // Debounced: saving on every page turn would be wasteful.
+          saveTimer = setTimeout(() => void api.saveProgress(id, formatLocator(e.anchor), e.progression), 600);
+        });
+        engine.on("selection", (s) => {
+          selection = s;
+          active = null;
+        });
+        engine.on("highlight", ({ id: hid, rect }) => {
+          const a = annotations.find((x) => x.id === hid);
+          if (a) active = { annotation: a, rect };
+          selection = null;
+        });
+        engine.on("externalLink", (url) => {
+          void navigator.clipboard?.writeText(url).catch(() => {});
+          toast(`External link copied: ${url}`);
+        });
+        engine.on("key", onKey);
+        engine.on("center", () => (chrome = !chrome));
+        engine.on("error", (e) => toast(e.message, "error"));
+
+        await engine.open(book.progress?.locator);
+      } catch (e) {
+        toast(String(e), "error", 8000);
+        onclose();
+      }
+    })();
+
+    return () => {
+      disposed = true;
+      clearTimeout(saveTimer);
+      // Flush the final position immediately when leaving the book.
+      if (where) void api.saveProgress(id, formatLocator(where.anchor), where.progression);
+      engine?.destroy();
+    };
+  });
+
+  // STEP 3: settings changes re-layout in place (or switch views) — position is kept.
+  $effect(() => {
+    const snap = $state.snapshot(settings);
+    engine?.setSettings(snap);
+  });
+
+  // ----- keyboard ---------------------------------------------------------
+  function onKey(e: KeyboardEvent) {
+    if (editing) return;
+    const t = e.target as HTMLElement | null;
+    if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT")) return;
+    switch (e.key) {
+      case "ArrowRight":
+      case "PageDown":
+        e.preventDefault();
+        void engine?.next();
+        break;
+      case " ":
+        e.preventDefault();
+        void (e.shiftKey ? engine?.prev() : engine?.next());
+        break;
+      case "ArrowLeft":
+      case "PageUp":
+        e.preventDefault();
+        void engine?.prev();
+        break;
+      case "Escape":
+        if (selection || active) {
+          selection = null;
+          active = null;
+          engine?.clearSelection();
+        } else if (panel) panel = null;
+        else onclose();
+        break;
+      case "b":
+        if (!e.ctrlKey && !e.metaKey) void toggleBookmark();
+        break;
+    }
+  }
+
+  // ----- annotations ------------------------------------------------------
+  async function refreshAnnotations() {
+    annotations = await api.listAnnotations(id);
+    engine?.setAnnotations($state.snapshot(annotations));
+  }
+
+  async function createHighlight(color: string, note = ""): Promise<Annotation | null> {
+    if (!selection || !book) return null;
+    const s = selection;
+    try {
+      const a = await api.addAnnotation({
+        bookId: id,
+        kind: note ? "note" : "highlight",
+        start: formatLocator(s.start),
+        end: formatLocator(s.end),
+        quote: s.text.trim(),
+        note,
+        color,
+        chapter: book.manifest.spine[s.start.spine]?.title ?? null,
+      });
+      selection = null;
+      engine?.clearSelection();
+      await refreshAnnotations();
+      return a;
+    } catch (e) {
+      toast(String(e), "error");
+      return null;
+    }
+  }
+
+  function noteForSelection() {
+    if (!selection) return;
+    const quote = selection.text.trim();
+    editing = {
+      quote,
+      initial: "",
+      save: async (note) => {
+        await createHighlight("yellow", note);
+        editing = null;
+      },
+    };
+  }
+
+  function editNote(a: Annotation) {
+    active = null;
+    editing = {
+      quote: a.quote,
+      initial: a.note,
+      save: async (note) => {
+        await api.updateAnnotation(a.id, { note });
+        editing = null;
+        await refreshAnnotations();
+      },
+    };
+  }
+
+  async function recolor(a: Annotation, color: string) {
+    await api.updateAnnotation(a.id, { color });
+    active = null;
+    await refreshAnnotations();
+  }
+
+  async function removeAnnotation(a: Annotation) {
+    await api.deleteAnnotation(a.id);
+    active = null;
+    await refreshAnnotations();
+  }
+
+  async function toggleBookmark() {
+    if (!where || !book) return;
+    if (pageBookmarks.length) {
+      for (const b of pageBookmarks) await api.deleteAnnotation(b.id);
+    } else {
+      // A bookmark remembers the top of the page plus a snippet for the list.
+      const snippet = await snippetAt();
+      await api.addAnnotation({
+        bookId: id,
+        kind: "bookmark",
+        start: formatLocator(where.range.start),
+        quote: snippet,
+        chapter: where.chapterTitle,
+      });
+    }
+    await refreshAnnotations();
+  }
+
+  async function snippetAt(): Promise<string> {
+    // The first ~120 characters of the visible text.
+    const r = engine?.visibleRange();
+    if (!r) return "";
+    const frame = host?.querySelector("iframe");
+    const doc = frame?.contentDocument;
+    const block = doc?.querySelector(`[data-jrb="${r.start.block}"]`);
+    return (block?.textContent ?? "").slice(r.start.offset, r.start.offset + 120).trim();
+  }
+
+  function jumpTo(a: Annotation) {
+    panel = null;
+    void engine?.goToLocator(a.start);
+  }
+
+  function copySelection() {
+    if (selection) void navigator.clipboard?.writeText(selection.text);
+    selection = null;
+    engine?.clearSelection();
+  }
+
+  const pct = $derived(Math.round((scrub ?? where?.progression ?? 0) * 100));
+</script>
+
+<svelte:window onkeydown={onKey} />
+
+<div class="reader" class:hide-chrome={!chrome && !panel}>
+  <header class="bar top">
+    <button class="icon-btn" title="Back to library (Esc)" onclick={onclose}><Icon name="back" /></button>
+    <div class="titles">
+      <span class="book">{title}</span>
+      {#if where?.chapterTitle}<span class="chapter">{where.chapterTitle}</span>{/if}
+    </div>
+    <div class="actions">
+      <button class="icon-btn" class:active={panel === "toc"} title="Contents" onclick={() => (panel = panel === "toc" ? null : "toc")}><Icon name="toc" /></button>
+      <button class="icon-btn" class:active={panel === "notes"} title="Highlights & bookmarks" onclick={() => (panel = panel === "notes" ? null : "notes")}><Icon name="highlight" /></button>
+      <button class="icon-btn" class:active={pageBookmarks.length > 0} title="Bookmark this page (B)" onclick={toggleBookmark}><Icon name="bookmark" filled={pageBookmarks.length > 0} /></button>
+      <button class="icon-btn" title={settings.flow === "paginated" ? "Switch to scrolling" : "Switch to pages"}
+        onclick={() => ((settings.flow = settings.flow === "paginated" ? "scrolled" : "paginated"), saveSettings())}>
+        <Icon name={settings.flow === "paginated" ? "scroll" : "pages"} />
+      </button>
+      <button class="icon-btn" class:active={panel === "settings"} title="Reading settings" onclick={() => (panel = panel === "settings" ? null : "settings")}><Icon name="type" /></button>
+    </div>
+  </header>
+
+  <div class="stage">
+    {#if settings.flow === "paginated"}
+      <button class="edge left" title="Previous page" onclick={() => engine?.prev()}><Icon name="left" /></button>
+    {/if}
+    <div class="host" bind:this={host}></div>
+    {#if settings.flow === "paginated"}
+      <button class="edge right" title="Next page" onclick={() => engine?.next()}><Icon name="right" /></button>
+    {/if}
+
+    {#if panel}
+      <aside class="side" aria-label={panel}>
+        {#if panel === "toc" && book}
+          <h2>Contents</h2>
+          <TocPanel entries={book.manifest.toc} current={currentHref} onselect={(h) => ((panel = null), engine?.goToHref(h))} />
+        {:else if panel === "notes"}
+          <h2>Annotations</h2>
+          <AnnotationsPanel {annotations} onselect={jumpTo} onedit={editNote} ondelete={removeAnnotation} />
+        {:else if panel === "settings"}
+          <h2>Reading settings</h2>
+          <SettingsPanel />
+        {/if}
+      </aside>
+    {/if}
+  </div>
+
+  <footer class="bar bottom">
+    <input
+      class="progress"
+      type="range"
+      min="0"
+      max="1000"
+      aria-label="Position in book"
+      value={Math.round((scrub ?? where?.progression ?? 0) * 1000)}
+      oninput={(e) => (scrub = Number((e.currentTarget as HTMLInputElement).value) / 1000)}
+      onchange={(e) => {
+        const f = Number((e.currentTarget as HTMLInputElement).value) / 1000;
+        scrub = null;
+        void engine?.goToFraction(f);
+      }}
+    />
+    <span class="pos">
+      {#if where && where.pages > 0}<span>Page {where.page} of {where.pages}</span><span class="dot">·</span>{/if}<span>{pct}%</span>
+    </span>
+  </footer>
+
+  {#if selection}
+    <SelectionMenu rect={selection.rect} oncolor={(c) => createHighlight(c)} onnote={noteForSelection} oncopy={copySelection} />
+  {/if}
+  {#if active}
+    {@const a = active.annotation}
+    <SelectionMenu rect={active.rect} existing color={a.color} oncolor={(c) => recolor(a, c)} onnote={() => editNote(a)} ondelete={() => removeAnnotation(a)} />
+  {/if}
+  {#if editing}
+    <NoteEditor quote={editing.quote} initial={editing.initial} onsave={(n) => editing?.save(n)} oncancel={() => (editing = null)} />
+  {/if}
+</div>
+
+<style>
+  .reader {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    background: var(--bg);
+  }
+  .bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 10px;
+    transition: opacity 0.2s;
+  }
+  .hide-chrome .bar {
+    opacity: 0;
+  }
+  .hide-chrome .bar:hover,
+  .hide-chrome .bar:focus-within {
+    opacity: 1;
+  }
+  .titles {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    gap: 10px;
+    align-items: baseline;
+    justify-content: center;
+  }
+  .book {
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .chapter {
+    color: var(--muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .actions {
+    display: flex;
+    gap: 2px;
+  }
+  .stage {
+    position: relative;
+    flex: 1;
+    display: flex;
+    min-height: 0;
+  }
+  .host {
+    position: relative;
+    flex: 1;
+    overflow: hidden;
+  }
+  .edge {
+    width: 40px;
+    border: 0;
+    background: none;
+    color: var(--muted);
+    opacity: 0.35;
+    cursor: pointer;
+  }
+  .edge:hover {
+    opacity: 1;
+  }
+  .side {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: min(360px, 92vw);
+    overflow: auto;
+    background: var(--bg);
+    border-left: 1px solid var(--border);
+    box-shadow: -12px 0 32px rgba(0, 0, 0, 0.12);
+    z-index: 10;
+  }
+  .side h2 {
+    font-size: 15px;
+    margin: 14px 18px 6px;
+  }
+  .bottom {
+    gap: 14px;
+    padding: 6px 18px 10px;
+  }
+  .progress {
+    flex: 1;
+    accent-color: var(--accent);
+  }
+  .dot {
+    margin: 0 6px;
+  }
+  .pos {
+    font-size: 12.5px;
+    color: var(--muted);
+    min-width: 130px;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+</style>

@@ -1,0 +1,28 @@
+# Copyright 2026 The justRead Authors
+# SPDX-License-Identifier: Apache-2.0
+
+[package]
+name = "justread-app"
+description = "justRead — offline, cross-platform ebook reader (Tauri shell)."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[lib]
+# staticlib/cdylib are required for the Android/iOS builds in Phase 6.
+name = "justread_app_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }   # Apache-2.0 OR MIT
+
+[dependencies]
+justbook.workspace = true
+justread-formats.workspace = true
+justread-library.workspace = true
+justread-locator.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tauri = { version = "2", features = [] }          # Apache-2.0 OR MIT
+tauri-plugin-dialog = "2"                         # Apache-2.0 OR MIT

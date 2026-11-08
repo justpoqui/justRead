@@ -8,7 +8,7 @@ members = [
     "crates/justread-locator",
     "crates/justread-formats",
     "crates/justread-library",
-    #"src-tauri",
+    "src-tauri",
 ]
 
 [workspace.package]

@@ -1,0 +1,66 @@
+# Copyright 2026 The justRead Authors
+# SPDX-License-Identifier: Apache-2.0
+#
+# License policy, enforced in CI with `cargo deny check licenses`.
+# Docs: https://embarkstudios.github.io/cargo-deny/checks/licenses/cfg.html
+#
+# Project rule: dependencies must be MIT, BSD, Apache-2.0, ISC or zlib.
+# Dual-licensed crates pass when any allowed option is offered.
+# The few transitive exceptions below come from Tauri itself; each is
+# listed by crate so that nothing else can slip in under the same license.
+
+[graph]
+all-features = false
+
+[licenses]
+confidence-threshold = 0.9
+# Allowed licenses that no current dependency uses are fine (they are policy).
+unused-allowed-license = "allow"
+allow = [
+    "MIT",
+    "MIT-0",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Zlib",
+    "0BSD",
+]
+
+exceptions = [
+    # MPL-2.0 (file-level copyleft; used unmodified, which Apache-2.0 distribution permits).
+    # Pulled in by tauri-utils → dom_query/html parsing, and dirs-sys → option-ext.
+    { crate = "cssparser", allow = ["MPL-2.0"] },
+    { crate = "cssparser-macros", allow = ["MPL-2.0"] },
+    { crate = "selectors", allow = ["MPL-2.0"] },
+    { crate = "dtoa-short", allow = ["MPL-2.0"] },
+    { crate = "option-ext", allow = ["MPL-2.0"] },
+    # Unicode-3.0 (permissive, MIT-style). ICU4X data/utility crates via url/idna.
+    { crate = "icu_collections", allow = ["Unicode-3.0"] },
+    { crate = "icu_locale_core", allow = ["Unicode-3.0"] },
+    { crate = "icu_normalizer", allow = ["Unicode-3.0"] },
+    { crate = "icu_normalizer_data", allow = ["Unicode-3.0"] },
+    { crate = "icu_properties", allow = ["Unicode-3.0"] },
+    { crate = "icu_properties_data", allow = ["Unicode-3.0"] },
+    { crate = "icu_provider", allow = ["Unicode-3.0"] },
+    { crate = "litemap", allow = ["Unicode-3.0"] },
+    { crate = "potential_utf", allow = ["Unicode-3.0"] },
+    { crate = "tinystr", allow = ["Unicode-3.0"] },
+    { crate = "writeable", allow = ["Unicode-3.0"] },
+    { crate = "yoke", allow = ["Unicode-3.0"] },
+    { crate = "yoke-derive", allow = ["Unicode-3.0"] },
+    { crate = "zerofrom", allow = ["Unicode-3.0"] },
+    { crate = "zerofrom-derive", allow = ["Unicode-3.0"] },
+    { crate = "zerotrie", allow = ["Unicode-3.0"] },
+    { crate = "zerovec", allow = ["Unicode-3.0"] },
+    { crate = "zerovec-derive", allow = ["Unicode-3.0"] },
+    # "(MIT OR Apache-2.0) AND Unicode-3.0": Unicode data tables used by the Rust parser ecosystem.
+    { crate = "unicode-ident", allow = ["Unicode-3.0"] },
+]
+
+[bans]
+multiple-versions = "allow"
+
+[advisories]
+# Advisory checks need network access to the RustSec database; run them in CI.

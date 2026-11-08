@@ -1,0 +1,16 @@
+{
+  "name": "justread",
+  "private": true,
+  "license": "Apache-2.0",
+  "type": "module",
+  "scripts": {
+    "tauri": "tauri",
+    "dev": "tauri dev",
+    "build": "tauri build",
+    "test": "pnpm --dir ui test && cargo test --workspace",
+    "check": "pnpm --dir ui check"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.12.4"
+  }
+}

@@ -1,0 +1,115 @@
+// Copyright 2026 The justRead Authors
+// SPDX-License-Identifier: Apache-2.0
+
+// Types mirroring the Rust side (crates/justbook/src/manifest.rs and
+// crates/justread-library/src/models.rs). Keep them in sync.
+
+export interface Metadata {
+  title: string;
+  authors: string[];
+  language: string | null;
+  publisher: string | null;
+  description: string | null;
+  published: string | null;
+  series: string | null;
+  seriesIndex: number | null;
+  identifiers: string[];
+}
+
+export interface SpineItem {
+  href: string;
+  title: string | null;
+  chars: number;
+  blocks: number;
+  linear: boolean;
+}
+
+export interface TocEntry {
+  title: string;
+  href: string | null;
+  children?: TocEntry[];
+}
+
+export interface Manifest {
+  schemaVersion: number;
+  id: string;
+  layout: "reflowable" | "fixed";
+  metadata: Metadata;
+  spine: SpineItem[];
+  toc: TocEntry[];
+  resources: { href: string; mediaType: string }[];
+  cover: string | null;
+  source: { format: string; fileName: string; sha256: string; converterVersion: string };
+}
+
+export interface BookSummary {
+  id: string;
+  title: string;
+  authors: string[];
+  series: string | null;
+  seriesIndex: number | null;
+  language: string | null;
+  format: string;
+  cover: string | null;
+  addedAt: number;
+  lastOpenedAt: number | null;
+  progression: number;
+}
+
+export type SortKey = "title" | "author" | "series" | "recent" | "progress" | "added";
+
+export interface BookQuery {
+  search?: string | null;
+  sort: SortKey;
+  descending: boolean;
+}
+
+export interface Progress {
+  locator: string;
+  progression: number;
+  updatedAt: number;
+}
+
+export interface OpenedBook {
+  book: BookSummary;
+  manifest: Manifest;
+  progress: Progress | null;
+}
+
+export type ImportOutcome =
+  | { status: "imported"; book: BookSummary; warnings: string[] }
+  | { status: "duplicate"; book: BookSummary };
+
+export interface ImportResult {
+  path: string;
+  outcome: ImportOutcome | null;
+  error: string | null;
+  drm: boolean;
+}
+
+export type AnnotationKind = "highlight" | "note" | "bookmark";
+
+export interface Annotation {
+  id: string;
+  bookId: string;
+  kind: AnnotationKind;
+  start: string;
+  end: string | null;
+  quote: string;
+  note: string;
+  color: string;
+  chapter: string | null;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface NewAnnotation {
+  bookId: string;
+  kind: AnnotationKind;
+  start: string;
+  end?: string | null;
+  quote?: string;
+  note?: string;
+  color?: string;
+  chapter?: string | null;
+}
