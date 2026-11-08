@@ -5,6 +5,7 @@
 //! `justbook`, `justread-formats` and `justread-library` crates; this crate
 //! only wires them to the webview (commands + the `justbook://` protocol).
 
+mod browse;
 mod commands;
 mod protocol;
 mod state;
@@ -17,6 +18,7 @@ pub fn run() {
     tauri::Builder::default()
         // STEP 1: only the dialog plugin — used for the "Import" file picker.
         .plugin(tauri_plugin_dialog::init())
+        .manage(browse::BrowseState::default())
         // STEP 2: serve book packages to the reader iframe.
         .register_asynchronous_uri_scheme_protocol(protocol::SCHEME, protocol::handle)
         // STEP 3: open the library in the per-user app data directory.
@@ -43,6 +45,13 @@ pub fn run() {
             commands::add_annotation,
             commands::update_annotation,
             commands::delete_annotation,
+            browse::open_browser,
+            browse::browse_navigate,
+            browse::browse_history,
+            browse::browse_reload,
+            browse::browse_allow_http,
+            browse::browse_config,
+            browse::browse_set_search,
         ])
         .run(tauri::generate_context!())
         .expect("error while running justRead");

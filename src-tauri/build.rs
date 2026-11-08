@@ -27,6 +27,14 @@ const COMMANDS: &[&str] = &[
     "add_annotation",
     "update_annotation",
     "delete_annotation",
+    // justBrowse (granted to the toolbar webview only, except open_browser)
+    "open_browser",
+    "browse_navigate",
+    "browse_history",
+    "browse_reload",
+    "browse_allow_http",
+    "browse_config",
+    "browse_set_search",
 ];
 
 fn main() {

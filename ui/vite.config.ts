@@ -14,6 +14,8 @@ export default defineConfig({
   build: {
     target: "es2022",
     sourcemap: false,
+    // Two pages: the reader (index.html) and the justBrowse toolbar (browse.html).
+    rollupOptions: { input: { main: "index.html", browse: "browse.html" } },
   },
   test: {
     environment: "jsdom",

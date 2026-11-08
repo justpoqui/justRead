@@ -4,6 +4,7 @@
   import { open as openDialog } from "@tauri-apps/plugin-dialog";
   import { getCurrentWebview } from "@tauri-apps/api/webview";
   import { getCurrentWindow } from "@tauri-apps/api/window";
+  import { listen } from "@tauri-apps/api/event";
   import Icon from "../components/Icon.svelte";
   import BookCover from "../components/BookCover.svelte";
   import { api } from "../lib/ipc/api";
@@ -122,7 +123,15 @@
       })
       .then((u) => (unlisten = u))
       .catch(() => {});
-    return () => unlisten?.();
+    // Books downloaded in justBrowse are imported by Rust; refresh when that happens.
+    let unlistenLib: (() => void) | undefined;
+    listen("library-changed", () => void refresh())
+      .then((u) => (unlistenLib = u))
+      .catch(() => {});
+    return () => {
+      unlisten?.();
+      unlistenLib?.();
+    };
   });
 
   function setSort(key: SortKey) {
@@ -161,6 +170,9 @@
         onclick={() => ((libraryPrefs.view = libraryPrefs.view === "grid" ? "list" : "grid"), saveLibraryPrefs())}
       >
         <Icon name={libraryPrefs.view === "grid" ? "list" : "grid"} />
+      </button>
+      <button class="btn" title="Find free books online (justBrowse)" onclick={() => api.openBrowser().catch((e) => toast(String(e), "error"))}>
+        <Icon name="globe" size={16} /> Find books
       </button>
       <button class="btn primary" onclick={pickFiles} disabled={importing}>
         <Icon name="plus" size={16} />

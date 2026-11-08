@@ -54,5 +54,20 @@ for Phase 3: PDF cover generation, PDF text actually drawn, spread/page locators
 lazy rendering, outline → TOC, zoom and fit-width, PDF bookmarks, comic natural order, cover-alone and
 landscape-alone spreads.
 
+**justBrowse (WebKitGTK, real app):** a local Node server plays "the web"; its page tries to call Tauri
+commands, emit events, open dialogs, read `justbook://` files and storage, and reports the results
+from inside the sandbox. The run checks: toolbar-only IPC, HTTP warning before any request, all escape
+attempts denied by the ACL, trackers blocked and counted, third-party cookies refused (with a
+first-party control), EPUB download imported into the library, non-books discarded, DuckDuckGo
+default, template validation, SearXNG template. Run (debug build only):
+
+```sh
+JUSTREAD_BROWSE_ALLOW_LOOPBACK=1 XDG_DATA_HOME=/tmp/xdg-b tauri-driver &
+cd ui && node e2e/browse.mjs ../target/debug/justread-app /tmp/sample.epub /tmp/bshots
+```
+`JUSTREAD_BROWSE_ALLOW_LOOPBACK` is honoured only by debug builds; release builds always refuse local
+destinations. Note: `tauri-driver` passes *its* environment to the app, so restart it to change
+`XDG_DATA_HOME`.
+
 The WebKitGTK scenario checks the same core paths against the real backend, including **native**
 drag-selection and clicks inside the chapter iframe (see adr/0003).

@@ -1,6 +1,6 @@
 # justRead architecture
 
-_Last updated: Phase 4 complete (DjVu pending a decision)._
+_Last updated: Phase 5 complete (justBrowse, desktop)._
 
 ## Overview
 
@@ -140,6 +140,18 @@ Migrations are append-only SQL tracked with `PRAGMA user_version`.
 * **`justbook://` protocol** (`protocol.rs`): `/<uuid>/<package path>` → file bytes. UUID-validated,
   traversal- and symlink-safe, never serves `manifest.json` or `original/`, `nosniff`, scripts denied.
 
+## justBrowse (`src-tauri/src/browse`, `ui/src/browse`)
+
+A separate window with two webviews: the **toolbar** (`browse.html`, our page; capability
+`capabilities/browse.json` grants only `browse_*` commands) and the **content** (remote pages; in no
+capability, so zero IPC; incognito; autofill off; third-party cookies refused). All content traffic
+goes through a local **proxy** (`proxy.rs`) that applies the tracker/ad blocklist (`blocklist.txt`,
+original list) to every request, tunnels HTTPS without decryption, refuses plain HTTP unless the
+user accepted the warning for that host, and refuses local destinations after DNS resolution.
+Navigation policy and address-bar parsing are pure functions in `policy.rs` (DuckDuckGo by default;
+any `https://…{q}` template such as SearXNG). Book downloads are imported and the reader's library
+refreshes via a `library-changed` event. Details and platform caveats: adr/0008-justbrowse.md.
+
 ## Reader engine (`ui/src/lib/reader`)
 
 | File | Role |
@@ -205,8 +217,8 @@ languages, and end-to-end runs in Chromium (mocked IPC) and in the real app on W
 | 2 | Two-page spread, highlights/notes/bookmarks, position persistence across layouts | ✅ done |
 | 3 | PDF (PDF.js) and comics (CBZ/CB7; CBR pending license decision) | ✅ done |
 | 4 | MOBI, AZW3, FB2, HTML, DOCX adapters; DjVu | ✅ done, except DjVu (decision pending, adr/0007) |
-| 5 | justBrowse (privacy-hardened browser) | next |
-| 6 | Android and iOS | |
+| 5 | justBrowse (privacy-hardened browser) | ✅ done on desktop (mobile design in adr/0008) |
+| 6 | Android and iOS | next |
 | 7 | Markdown highlight export / JustNotes | |
 
 ### Known limitations / follow-ups
@@ -218,6 +230,8 @@ languages, and end-to-end runs in Chromium (mocked IPC) and in the real app on W
 * MathML is unwrapped to text; audio/video are dropped.
 * PDFs: no text selection, highlights or search yet (bookmarks work); highlights need the PDF.js text
   layer (later). Annotations in fixed books are bookmarks only.
+* justBrowse: macOS < 14 has no proxy (no blocklist for sub-resources); Windows third-party cookie
+  behaviour unverified; blocklist is domain-level and modest; Tauri `unstable` API dependency.
 * HUFF/CDIC-compressed MOBI is covered by a synthetic test only (no real sample available offline).
 * DOCX: EMF/WMF images, text boxes, comments and tracked changes are not converted.
 * CBR import awaits a decision on the unRAR license (adr/0006).

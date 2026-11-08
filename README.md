@@ -6,7 +6,7 @@ An open-source, cross-platform ebook reader: part of the **just** suite.
 * **Your books, any layout.** Paginated, two-page spread or continuous scroll; switch at any time without losing your place.
 * **Apache-2.0**, written from scratch.
 
-> Status: Phases 1–4 are implemented: desktop reader; spreads, highlights, notes, bookmarks; PDF and comics; MOBI/AZW3/FB2/DOCX/HTML. DjVu and CBR await licensing decisions. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#roadmap).
+> Status: Phases 1–5 are implemented on desktop: reader; layouts, highlights, notes, bookmarks; PDF and comics; MOBI/AZW3/FB2/DOCX/HTML; justBrowse. DjVu and CBR await licensing decisions. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#roadmap).
 
 ## Features (today)
 
@@ -18,6 +18,7 @@ An open-source, cross-platform ebook reader: part of the **just** suite.
 | Themes | Light, sepia, dark, black, custom colors |
 | Library | Grid and list views, covers, search, sort by title/author/series/recently read/progress/date added, drag-and-drop import |
 | Annotations | Highlights in five colors + underline, notes, bookmarks; all stored locally in SQLite |
+| justBrowse | A privacy-hardened browser for free books: HTTPS-only, tracker blocklist, private sessions, no third-party cookies, DuckDuckGo or your own SearXNG; downloaded books go straight to your library |
 
 ## Building
 

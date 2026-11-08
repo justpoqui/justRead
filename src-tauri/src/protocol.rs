@@ -27,6 +27,18 @@ pub fn handle<R: Runtime>(
     request: Request<Vec<u8>>,
     responder: UriSchemeResponder,
 ) {
+    // STEP 0: only the reader may read book files — never justBrowse's web
+    // content (which could otherwise probe justbook:// URLs).
+    if ctx.webview_label() != "main" {
+        responder.respond(
+            Response::builder()
+                .status(StatusCode::FORBIDDEN)
+                .body(Vec::new())
+                .unwrap(),
+        );
+        return;
+    }
+
     // STEP 1: copy what we need; the work happens on a blocking thread.
     let books_dir = ctx.app_handle().state::<AppState>().books_dir.clone();
     let path = request.uri().path().to_string();

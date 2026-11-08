@@ -22,7 +22,8 @@ const WD = "http://127.0.0.1:4444";
 async function wd(method, path, body) {
   const r = await fetch(WD + path, { method, headers: { "Content-Type": "application/json" }, body: body ? JSON.stringify(body) : undefined });
   const j = await r.json();
-  if (j.value && j.value.error) throw new Error(`${path}: ${j.value.error} ${j.value.message}`);
+  // WebDriver errors are non-2xx responses with value.error set.
+  if (!r.ok && j.value && j.value.error) throw new Error(`${path}: ${j.value.error} ${j.value.message}`);
   return j.value;
 }
 const { sessionId } = await wd("POST", "/session", { capabilities: { alwaysMatch: { "tauri:options": { application: app } } } });
