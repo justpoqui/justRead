@@ -52,7 +52,7 @@ const layout = async (label) => {
   await sleep(200);
   await exec((l) => [...document.querySelectorAll(".layout-menu button")].find((b) => b.innerText.includes(l)).click(), label);
 };
-const pos = () => exec(() => document.querySelector(".pos")?.innerText ?? "");
+const pos = () => exec(() => document.querySelector(".pos-full")?.textContent ?? "");
 
 try {
   // STEP 1: library from the real SQLite database.
@@ -138,7 +138,7 @@ try {
     const d = c.getContext("2d").getImageData(0, 0, c.width, Math.floor(c.height / 3)).data;
     let dark = 0;
     for (let i = 0; i < d.length; i += 4) if (d[i] < 100 && d[i + 1] < 100 && d[i + 2] < 100) dark++;
-    return { canvas: true, dark, pos: document.querySelector(".pos").innerText };
+    return { canvas: true, dark, pos: document.querySelector(".pos-full").textContent };
   });
   check(pdf.canvas && pdf.dark > 200, "PDF renders in WebKitGTK", JSON.stringify(pdf));
   await keys("\uE014");

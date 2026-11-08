@@ -216,6 +216,25 @@ anchor scrolls off screen. Re-layouts (font, size, margins, theme, window size, 
 switches (pages ⇄ scroll) re-render and then display the anchor, so repeated switching never drifts.
 Progress saved to SQLite is the anchor.
 
+### Reader screen (`ui/src/views/Reader.svelte`)
+
+- **Top bar:** back, title, ⚙ **Settings**: a full screen (`SettingsScreen.svelte`) with one category
+  per group: Layout, Text (Page & zoom for PDFs/comics), Theme, Toolbar, Page indicator. The quick
+  **Aa** panel still offers everything in one sheet.
+- **Toolbar:** the user picks which buttons show (Contents, Highlights, Bookmark, Layout, Aa,
+  Position), their order, and whether they sit in the bottom bar (default) or the top bar.
+  Stored in `ReaderSettings.toolbar` / `toolbarPosition`.
+- **Page indicator:** tapping it cycles pages left in chapter → pages left in book → % of chapter →
+  % of book (`lib/reader/progress.ts`, unit-tested). Text books have no fixed page count, so "pages
+  left in book" is estimated from this chapter's pages per character. Scroll layout only offers the
+  percentages; PDFs/comics only whole-book views. A hidden `.pos-full` label always holds
+  "Page x of y" for screen readers and tests.
+- **Position popup** (replaces the always-on slider, which was easy to bump): previous/next chapter,
+  a fine slider inside the chapter (`Engine.goToChapterFraction`), and a whole-book slider that only
+  previews the target chapter until **Go**. Any jump from the popup offers "Back to where you were".
+- **Hiding controls:** a tap in the middle or the ⌄ button hides both bars; hidden controls ignore
+  taps and clicks, the indicator stays faintly visible, and a small handle brings them back.
+
 ### Chapter isolation
 
 Chapters render in same-origin `srcdoc` iframes (so the engine can measure and annotate them) with

@@ -149,6 +149,12 @@ export class PaginatedView implements View {
     return this.screens <= 1 ? 0 : this.screen / this.screens;
   }
 
+  async goToChapterFraction(fraction: number): Promise<void> {
+    // Pages are discrete: pick the nearest one (the last page is reachable at 1).
+    this.scrollToScreen(Math.round(fraction * Math.max(0, this.screens - 1)));
+    this.ctx.relocated();
+  }
+
   pageInfo() {
     return { page: this.screen + 1, pages: this.screens };
   }

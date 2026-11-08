@@ -184,6 +184,13 @@ export class ScrolledView implements View {
     return Math.min(1, Math.max(0, (this.scroller.scrollTop - top.el.offsetTop) / top.el.offsetHeight));
   }
 
+  async goToChapterFraction(fraction: number): Promise<void> {
+    const top = this.sectionAt(1);
+    if (!top) return;
+    this.scroller.scrollTop = top.el.offsetTop + fraction * Math.max(0, top.el.offsetHeight - this.scroller.clientHeight / 2);
+    await this.onScroll();
+  }
+
   pageInfo() {
     return { page: 0, pages: 0 };
   }

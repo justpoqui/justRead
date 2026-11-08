@@ -61,7 +61,7 @@ function check(cond, label, extra = "") {
 }
 const settle = (ms = 900) => page.waitForTimeout(ms);
 const saved = () => page.evaluate(() => [...window.__jr.progress.values()][0]?.locator ?? null);
-const posText = () => page.locator(".pos").innerText();
+const posText = () => page.locator(".pos-full").textContent();
 const pageNo = async () => {
   const m = /Page (\d+) of (\d+)/.exec(await posText());
   return m ? { page: +m[1], pages: +m[2] } : null;
@@ -131,6 +131,77 @@ try {
   check(visible, "anchor block is on screen after re-layout");
   await page.locator('button[title="Reading settings"]').click();
   await page.screenshot({ path: join(shots, "04-font26.png") });
+
+  // STEP 7b: Settings screen by category, opened from the ⚙ cog.
+  const inBar = (bar, title) => page.locator(`.${bar} button[title="${title}"]`).count();
+  check((await inBar("bottom", "Contents")) === 1 && (await inBar("top", "Contents")) === 0, "toolbar buttons sit in the bottom bar by default");
+  await page.locator('.top button[title="Settings"]').click();
+  const cats = await page.locator('nav[aria-label="Settings categories"] button').allInnerTexts();
+  check(JSON.stringify(cats) === JSON.stringify(["Layout", "Text", "Theme", "Toolbar", "Page indicator"]), "settings are grouped by category", cats.join(","));
+  await page.locator('nav[aria-label="Settings categories"] button', { hasText: "Toolbar" }).click();
+  await page.screenshot({ path: join(shots, "04b-settings-toolbar.png") });
+  await page.locator(".screen li", { hasText: "Contents" }).locator("input").click();
+  await page.locator(".screen button", { hasText: "Top bar" }).click();
+  await page.locator('button[title="Close settings"]').click();
+  check((await inBar("bottom", "Contents")) + (await inBar("top", "Contents")) === 0 && (await inBar("top", "Layout")) === 1,
+    "removing a toolbar item hides it; Top bar moves the rest up");
+  await page.locator('.top button[title="Settings"]').click();
+  await page.locator('nav[aria-label="Settings categories"] button', { hasText: "Toolbar" }).click();
+  await page.locator(".screen button", { hasText: "Reset toolbar" }).click();
+  await page.keyboard.press("Escape");
+  check((await page.locator(".screen").count()) === 0 && (await inBar("bottom", "Contents")) === 1, "reset restores the default toolbar; Esc closes settings");
+
+  // STEP 7c: tapping the page indicator cycles chapter pages → book pages → % chapter → % book.
+  const labels = [];
+  for (let i = 0; i < 5; i++) {
+    labels.push(await page.locator(".pos-label").textContent());
+    await page.locator("button.pos").click();
+  }
+  check(/left in chapter/.test(labels[0]) && /about \d+ pages left in book/.test(labels[1]) && /% of chapter/.test(labels[2]) && /% of book/.test(labels[3]) && labels[4] === labels[0],
+    "page indicator cycles through its four views", labels.join(" | "));
+
+  // STEP 7d: Position popup — the book slider only previews until Go; Back returns.
+  const posStart = await saved();
+  await page.locator('button[title="Go to position"]').click();
+  await page.locator('input[aria-label="Position in book (preview)"]').evaluate((el) => { el.value = "900"; el.dispatchEvent(new Event("input", { bubbles: true })); });
+  await settle();
+  const preview = await page.locator(".sheet .preview").textContent();
+  check((await saved()) === posStart && /Chapter|Section/.test(preview), "book slider previews without moving", `${preview} / ${await saved()}`);
+  await page.screenshot({ path: join(shots, "04c-position.png") });
+  await page.locator(".sheet button", { hasText: "Go" }).click();
+  await settle();
+  const jumped = await saved();
+  check(jumped !== posStart && Number(jumped.split("/")[0].slice(2)) > 0, "Go jumps to the previewed place", jumped);
+  await page.locator(".sheet button", { hasText: "Back to where you were" }).click();
+  await settle();
+  check((await saved()) === posStart, "Back to where you were returns exactly", await saved());
+  await page.locator('.sheet button[title="Next chapter"]').click();
+  await settle();
+  check((await saved()).startsWith("f:1/"), "next chapter button", await saved());
+  await page.locator(".sheet button", { hasText: "Back to where you were" }).click();
+  await settle();
+  const fine = page.locator('input[aria-label="Position in chapter"]');
+  await fine.evaluate((el) => { el.value = el.max; el.dispatchEvent(new Event("input", { bubbles: true })); el.dispatchEvent(new Event("change", { bubbles: true })); });
+  await settle();
+  const atEnd = await pageNo();
+  check(atEnd && atEnd.page === atEnd.pages, "chapter slider reaches the last page of the chapter", JSON.stringify(atEnd));
+  await page.locator(".sheet button", { hasText: "Back to where you were" }).click();
+  await settle();
+  check((await saved()) === posStart, "…and back again", await saved());
+  await page.locator('button[title="Close position"]').click();
+
+  // STEP 7e: the collapse button hides the bars; the handle brings them back.
+  await page.locator('button[title="Hide controls"]').click();
+  await settle(400);
+  const collapsed = await page.evaluate(() => ({
+    top: getComputedStyle(document.querySelector(".top")).visibility,
+    contents: getComputedStyle(document.querySelector('button[title="Contents"]')).visibility,
+    handle: !!document.querySelector('button[title="Show controls"]'),
+  }));
+  check(collapsed.top === "hidden" && collapsed.contents === "hidden" && collapsed.handle, "Hide controls collapses both bars", JSON.stringify(collapsed));
+  await page.locator('button[title="Show controls"]').click();
+  await settle(400);
+  check(await page.evaluate(() => getComputedStyle(document.querySelector(".top")).visibility === "visible"), "Show controls restores them");
 
   // STEP 8: layouts are exactly what the reader picks, whatever the window shape.
   await page.setViewportSize({ width: 1800, height: 900 });

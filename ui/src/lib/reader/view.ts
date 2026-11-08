@@ -36,6 +36,8 @@ export interface View {
   visibleRange(): VisibleRange | null;
   /** 0..1 position within the current chapter (for accurate progress). */
   chapterFraction(): number;
+  /** Move to 0..1 within the current chapter. */
+  goToChapterFraction(fraction: number): Promise<void>;
   /** Pages of the current chapter (paginated only; `pages` is 0 when scrolling). */
   pageInfo(): { page: number; pages: number };
   /** Re-apply settings or react to a resize, keeping the position. */

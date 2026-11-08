@@ -10,6 +10,28 @@ export type FlowMode = "paginated" | "scrolled";
 /** Pages per screen in paginated mode — always exactly what the reader chose. */
 export type SpreadMode = "single" | "double";
 
+/** Buttons the reader toolbar can show (Settings → Toolbar). */
+export type ToolbarItem = "toc" | "notes" | "bookmark" | "layout" | "text" | "position";
+export const TOOLBAR_ITEMS: { id: ToolbarItem; label: string }[] = [
+  { id: "toc", label: "Contents" },
+  { id: "notes", label: "Highlights & bookmarks" },
+  { id: "bookmark", label: "Bookmark this page" },
+  { id: "layout", label: "Layout" },
+  { id: "text", label: "Quick text settings (Aa)" },
+  { id: "position", label: "Go to position" },
+];
+/** Default: everything that was in the toolbar before, plus Position. */
+export const DEFAULT_TOOLBAR: ToolbarItem[] = ["toc", "notes", "bookmark", "layout", "text", "position"];
+
+/** What the page indicator shows; tapping it cycles through the available ones. */
+export type ProgressDisplay = "chapterPages" | "bookPages" | "chapterPercent" | "bookPercent";
+export const PROGRESS_DISPLAYS: { id: ProgressDisplay; label: string }[] = [
+  { id: "chapterPages", label: "Pages left in chapter" },
+  { id: "bookPages", label: "Pages left in book" },
+  { id: "chapterPercent", label: "% of chapter" },
+  { id: "bookPercent", label: "% of book" },
+];
+
 export interface ReaderSettings {
   font: FontChoice;
   /** Family name used when `font` is "custom" (any installed font). */
@@ -33,6 +55,11 @@ export interface ReaderSettings {
   fit: "page" | "width";
   /** Fixed-layout zoom on top of the fit (1 = 100 %). */
   zoom: number;
+  /** Toolbar buttons, in order. */
+  toolbar: ToolbarItem[];
+  /** Where the toolbar buttons sit (back, title and ⚙ always stay on top). */
+  toolbarPosition: "top" | "bottom";
+  progressDisplay: ProgressDisplay;
 }
 
 export const DEFAULT_SETTINGS: ReaderSettings = {
@@ -51,6 +78,9 @@ export const DEFAULT_SETTINGS: ReaderSettings = {
   spread: "single",
   fit: "page",
   zoom: 1,
+  toolbar: [...DEFAULT_TOOLBAR],
+  toolbarPosition: "bottom",
+  progressDisplay: "chapterPages",
 };
 
 /** System font stacks — nothing is downloaded or bundled (offline, no OFL dependency). */
@@ -97,6 +127,13 @@ export function sanitizeSettings(raw: unknown): ReaderSettings {
   s.spread = (s.spread as string) === "double" || (s.spread as string) === "always" ? "double" : "single";
   if (!["page", "width"].includes(s.fit)) s.fit = "page";
   s.zoom = clamp(s.zoom, 0.5, 5, 1);
+  // Toolbar: known items only, no duplicates (an empty toolbar is allowed).
+  const known = new Set(TOOLBAR_ITEMS.map((t) => t.id));
+  s.toolbar = Array.isArray(s.toolbar)
+    ? s.toolbar.filter((t, i, a): t is ToolbarItem => known.has(t) && a.indexOf(t) === i)
+    : [...DEFAULT_TOOLBAR];
+  if (!["top", "bottom"].includes(s.toolbarPosition)) s.toolbarPosition = "bottom";
+  if (!PROGRESS_DISPLAYS.some((p) => p.id === s.progressDisplay)) s.progressDisplay = "chapterPages";
   // A custom font name is inserted into CSS: allow only safe characters.
   s.customFont = String(s.customFont ?? "").replace(/[^\p{L}\p{N} _-]/gu, "").slice(0, 64);
   s.customColors = { ...DEFAULT_SETTINGS.customColors, ...(s.customColors ?? {}) };

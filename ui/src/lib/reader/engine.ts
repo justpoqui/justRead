@@ -31,6 +31,8 @@ export interface RelocateEvent {
   anchor: Locator;
   /** 0..1 through the whole book. */
   progression: number;
+  /** 0..1 through the current chapter (reflowable only; null for fixed layout). */
+  chapterFraction: number | null;
   spine: number;
   chapterTitle: string | null;
   page: number;
@@ -70,6 +72,8 @@ export interface Engine {
   goToLocator(text: string): Promise<void>;
   goToHref(href: string): Promise<void>;
   goToFraction(fraction: number): Promise<void>;
+  /** Jump to 0..1 within the current chapter (fixed layout: within the book). */
+  goToChapterFraction(fraction: number): Promise<void>;
   setAnnotations(list: Annotation[]): void;
   clearSelection(): void;
   /** Table of contents discovered at runtime (PDF outline); null = use the manifest's. */
@@ -232,6 +236,14 @@ export class ReaderEngine implements Engine {
     return this.goTo(locateProgression(this.opts.manifest.spine, fraction));
   }
 
+  goToChapterFraction(fraction: number): Promise<void> {
+    return this.run(async () => {
+      // A fresh anchor is taken from what ends up on screen.
+      this.anchor = null;
+      await this.view?.goToChapterFraction(Math.min(1, Math.max(0, fraction)));
+    });
+  }
+
   async toc() {
     return null;
   }
@@ -344,7 +356,8 @@ export class ReaderEngine implements Engine {
     const before = spine.slice(0, idx).reduce((s, x) => s + x.chars, 0);
     const progression = Math.min(1, (before + (spine[idx]?.chars ?? 0) * view.chapterFraction()) / total);
     const { page, pages } = view.pageInfo();
-    return { range, visiblePages: null, anchor, progression, spine: idx, chapterTitle: spine[idx]?.title ?? null, page, pages };
+    const chapterFraction = view.chapterFraction();
+    return { range, visiblePages: null, anchor, progression, chapterFraction, spine: idx, chapterTitle: spine[idx]?.title ?? null, page, pages };
   }
 }
 

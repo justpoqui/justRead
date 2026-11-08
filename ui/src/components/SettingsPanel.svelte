@@ -4,7 +4,15 @@
   import { THEMES, type FontChoice, type ThemeId } from "../lib/settings/reader-settings";
 
   /** Fixed-layout books (PDF/comics) get fit & zoom instead of typography. */
-  let { fixed = false }: { fixed?: boolean } = $props();
+  // `sections` picks which groups to show: the quick Aa panel shows all of
+  // them, the Settings screen shows one group per category.
+  type Section = "layout" | "theme" | "text";
+  let {
+    fixed = false,
+    sections = ["layout", "theme", "text"],
+    headings = true,
+  }: { fixed?: boolean; sections?: Section[]; headings?: boolean } = $props();
+  const has = (s: Section) => sections.includes(s);
 
   // Every control writes straight into the shared settings object; the
   // reader reacts to the change and re-lays out in place.
@@ -28,15 +36,19 @@
 </script>
 
 <section class="panel" aria-label="Reading settings">
-  <h3>Layout</h3>
+  {#if has("layout")}
+  {#if headings}<h3>Layout</h3>{/if}
   <div class="seg three" role="radiogroup" aria-label="Layout">
     {#each LAYOUTS as l (l.id)}
       <button role="radio" aria-checked={currentLayout(settings) === l.id} class:on={currentLayout(settings) === l.id}
         onclick={() => setLayout(l.id)}>{l.label}</button>
     {/each}
   </div>
+  <p class="hint">Single page, two pages side by side, or one continuous scroll — always as chosen, whatever the screen shape.</p>
+  {/if}
 
-  <h3>Theme</h3>
+  {#if has("theme")}
+  {#if headings}<h3>Theme</h3>{/if}
   <div class="themes">
     {#each themes as t (t.id)}
       <button class="theme" class:on={settings.theme === t.id} title={t.label}
@@ -51,9 +63,10 @@
       <label>Links <input type="color" bind:value={settings.customColors.link} onchange={saveSettings} /></label>
     </div>
   {/if}
+  {/if}
 
-  {#if fixed}
-  <h3>Page</h3>
+  {#if has("text") && fixed}
+  {#if headings}<h3>Page</h3>{/if}
   <div class="seg" role="radiogroup" aria-label="Fit">
     <button role="radio" aria-checked={settings.fit === "page"} class:on={settings.fit === "page"}
       onclick={() => ((settings.fit = "page"), saveSettings())}>Fit page</button>
@@ -63,8 +76,8 @@
   <div class="row"><span>Zoom</span><span>{Math.round(settings.zoom * 100)}%</span></div>
   <input type="range" aria-label="Zoom" min="0.5" max="5" step="0.05" bind:value={settings.zoom} onchange={saveSettings} />
   <p class="hint">Ctrl + scroll or + / − to zoom, 0 to reset.</p>
-  {:else}
-  <h3>Text</h3>
+  {:else if has("text")}
+  {#if headings}<h3>Text</h3>{/if}
   <label class="row">Font
     <select bind:value={settings.font} onchange={saveSettings}>
       {#each fonts as f (f.id)}<option value={f.id}>{f.label}</option>{/each}

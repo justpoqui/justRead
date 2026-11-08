@@ -58,7 +58,7 @@ const check = (cond, label, extra = "") => {
   if (!cond) failures++;
 };
 const settle = (ms = 900) => page.waitForTimeout(ms);
-const pos = () => page.locator(".pos").innerText();
+const pos = () => page.locator(".pos-full").textContent();
 
 // STEP 2: touch helpers (one finger swipe, two finger pinch).
 async function touch(type, pts) {
@@ -146,11 +146,12 @@ try {
     const r = btn.getBoundingClientRect();
     const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
     const pos = document.querySelector(".pos");
+    const full = document.querySelector(".pos-full");
     return {
       topVisibility: getComputedStyle(document.querySelector(".top")).visibility,
       hitsButton: !!hit && (hit === btn || btn.contains(hit)),
       posOpacity: Number(getComputedStyle(pos).opacity),
-      posText: pos.innerText,
+      posText: full.textContent,
     };
   });
   check(hidden.topVisibility === "hidden" && !hidden.hitsButton, "hidden toolbar buttons can't be tapped", JSON.stringify(hidden));

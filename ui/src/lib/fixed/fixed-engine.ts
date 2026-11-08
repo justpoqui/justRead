@@ -300,6 +300,7 @@ export class FixedEngine implements Engine {
       visiblePages: visible,
       anchor: this.anchor,
       progression: Math.min(1, progression),
+      chapterFraction: null,
       spine: -1,
       chapterTitle: null,
       page: this.anchor.page + 1,
@@ -340,6 +341,11 @@ export class FixedEngine implements Engine {
 
   async goToFraction(fraction: number): Promise<void> {
     await this.goToPage(Math.floor(Math.min(0.9999, Math.max(0, fraction)) * this.source.count));
+  }
+
+  /** No chapters in fixed layout: "within the chapter" means within the book. */
+  goToChapterFraction(fraction: number): Promise<void> {
+    return this.goToFraction(fraction);
   }
 
   /** Bookmarks are handled by the reader screen using `visiblePages`. */

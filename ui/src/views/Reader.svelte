@@ -8,6 +8,9 @@
   import AnnotationsPanel from "../components/AnnotationsPanel.svelte";
   import SelectionMenu from "../components/SelectionMenu.svelte";
   import NoteEditor from "../components/NoteEditor.svelte";
+  import SettingsScreen from "../components/SettingsScreen.svelte";
+  import PositionSheet from "../components/PositionSheet.svelte";
+  import { fullPosition, nextMode, progressLabel, type ProgressInput } from "../lib/reader/progress";
   import { api, packageUrl } from "../lib/ipc/api";
   import type { Annotation, OpenedBook } from "../lib/ipc/types";
   import { ReaderEngine, type Engine, type RelocateEvent, type SelectionEvent } from "../lib/reader/engine";
@@ -29,12 +32,15 @@
   const fixed = $derived(book?.manifest.layout === "fixed");
   let where = $state<RelocateEvent | null>(null);
   let annotations = $state<Annotation[]>([]);
-  let panel = $state<"toc" | "notes" | "settings" | null>(null);
+  let panel = $state<"toc" | "notes" | "settings" | "position" | null>(null);
+  /** The full Settings screen (⚙). */
+  let settingsOpen = $state(false);
+  /** Where the reader was before a jump from the Position popup ("Back to where you were"). */
+  let returnTo = $state<string | null>(null);
   let chrome = $state(true);
   let selection = $state<SelectionEvent | null>(null);
   let active = $state<{ annotation: Annotation; rect: DOMRect } | null>(null);
   let editing = $state<{ quote: string; initial: string; save: (note: string) => Promise<void> } | null>(null);
-  let scrub = $state<number | null>(null);
   let layoutMenu = $state(false);
   /** Touch screens (phones/tablets): the OS adds its own selection toolbar. */
   const touch = typeof matchMedia !== "undefined" && matchMedia("(pointer: coarse)").matches;
@@ -165,7 +171,8 @@
         void engine?.prev();
         break;
       case "Escape":
-        if (layoutMenu) layoutMenu = false;
+        if (settingsOpen) settingsOpen = false;
+        else if (layoutMenu) layoutMenu = false;
         else if (selection || active) {
           selection = null;
           active = null;
@@ -292,47 +299,98 @@
     engine?.clearSelection();
   }
 
-  // "Pages 4–5 of 8" when a fixed-layout spread shows two pages.
-  const pageLabel = $derived.by(() => {
-    if (!where) return "";
-    const v = where.visiblePages;
-    if (fixed && settings.flow === "paginated" && v && v.length > 1) return `Pages ${v[0]! + 1}–${v[v.length - 1]! + 1} of ${where.pages}`;
-    return `Page ${where.page} of ${where.pages}`;
+  // ----- page indicator ---------------------------------------------------
+  const progressInput = $derived.by((): ProgressInput | null => {
+    if (!where || !book) return null;
+    const sp = book.manifest.spine;
+    return {
+      fixed,
+      paginated: settings.flow === "paginated",
+      page: where.page,
+      pages: where.pages,
+      visiblePages: where.visiblePages,
+      chapterFraction: where.chapterFraction,
+      bookFraction: where.progression,
+      chapterChars: sp[where.spine]?.chars ?? 0,
+      charsAfterChapter: sp.slice(where.spine + 1).reduce((n, x) => n + x.chars, 0),
+    };
   });
-  const pct = $derived(Math.round((scrub ?? where?.progression ?? 0) * 100));
+  const posLabel = $derived(progressInput ? progressLabel(settings.progressDisplay, progressInput) : "");
+  const posFull = $derived(progressInput ? fullPosition(progressInput) : "");
+
+  /** Tap the indicator: next view, remembered for next time. */
+  function cycleProgress() {
+    if (!progressInput) return;
+    settings.progressDisplay = nextMode(settings.progressDisplay, progressInput);
+    saveSettings();
+  }
+
+  // ----- position popup -----------------------------------------------------
+  /** Jumps from the popup remember where the reader was, once per visit. */
+  function jump(go: () => Promise<void> | undefined) {
+    if (where && returnTo === null) returnTo = formatLocator(where.anchor);
+    void go();
+  }
+  function goBack() {
+    const loc = returnTo;
+    returnTo = null;
+    if (loc) void engine?.goToLocator(loc);
+  }
+  function togglePanel(p: "toc" | "notes" | "settings" | "position") {
+    layoutMenu = false;
+    if (p === "position" && panel !== "position") returnTo = null;
+    panel = panel === p ? null : p;
+  }
+
+  const toolbarTop = $derived(settings.toolbarPosition === "top");
 </script>
 
 <svelte:window onkeydown={onKey} />
 
-<div class="reader" class:hide-chrome={!chrome && !panel}>
+<div class="reader" class:hide-chrome={!chrome && !panel && !settingsOpen}>
+  {#snippet toolbar(up: boolean)}
+    <div class="actions">
+      {#each settings.toolbar as item (item)}
+        {#if item === "toc"}
+          <button class="icon-btn" class:active={panel === "toc"} title="Contents" onclick={() => togglePanel("toc")}><Icon name="toc" /></button>
+        {:else if item === "notes"}
+          <button class="icon-btn" class:active={panel === "notes"} title="Highlights & bookmarks" onclick={() => togglePanel("notes")}><Icon name="highlight" /></button>
+        {:else if item === "bookmark"}
+          <button class="icon-btn" class:active={pageBookmarks.length > 0} title="Bookmark this page (B)" onclick={toggleBookmark}><Icon name="bookmark" filled={pageBookmarks.length > 0} /></button>
+        {:else if item === "layout"}
+          <div class="layout-wrap">
+            <button class="icon-btn" class:active={layoutMenu} title="Layout" aria-haspopup="menu" aria-expanded={layoutMenu}
+              onclick={() => (layoutMenu = !layoutMenu)}>
+              <Icon name={LAYOUT_ICONS[currentLayout(settings)]} />
+            </button>
+            {#if layoutMenu}
+              <div class="layout-menu" class:up role="menu">
+                {#each LAYOUTS as l (l.id)}
+                  <button role="menuitemradio" aria-checked={currentLayout(settings) === l.id} class:on={currentLayout(settings) === l.id}
+                    onclick={() => ((layoutMenu = false), setLayout(l.id))}>
+                    <Icon name={LAYOUT_ICONS[l.id]} size={18} /> {l.label}
+                  </button>
+                {/each}
+              </div>
+            {/if}
+          </div>
+        {:else if item === "text"}
+          <button class="icon-btn" class:active={panel === "settings"} title="Reading settings" onclick={() => togglePanel("settings")}><Icon name="type" /></button>
+        {:else if item === "position"}
+          <button class="icon-btn" class:active={panel === "position"} title="Go to position" onclick={() => togglePanel("position")}><Icon name="position" /></button>
+        {/if}
+      {/each}
+    </div>
+  {/snippet}
+
   <header class="bar top">
     <button class="icon-btn" title="Back to library (Esc)" onclick={onclose}><Icon name="back" /></button>
     <div class="titles">
       <span class="book">{title}</span>
       {#if where?.chapterTitle}<span class="chapter">{where.chapterTitle}</span>{/if}
     </div>
-    <div class="actions">
-      <button class="icon-btn" class:active={panel === "toc"} title="Contents" onclick={() => (panel = panel === "toc" ? null : "toc")}><Icon name="toc" /></button>
-      <button class="icon-btn" class:active={panel === "notes"} title="Highlights & bookmarks" onclick={() => (panel = panel === "notes" ? null : "notes")}><Icon name="highlight" /></button>
-      <button class="icon-btn" class:active={pageBookmarks.length > 0} title="Bookmark this page (B)" onclick={toggleBookmark}><Icon name="bookmark" filled={pageBookmarks.length > 0} /></button>
-      <div class="layout-wrap">
-        <button class="icon-btn" class:active={layoutMenu} title="Layout" aria-haspopup="menu" aria-expanded={layoutMenu}
-          onclick={() => (layoutMenu = !layoutMenu)}>
-          <Icon name={LAYOUT_ICONS[currentLayout(settings)]} />
-        </button>
-        {#if layoutMenu}
-          <div class="layout-menu" role="menu">
-            {#each LAYOUTS as l (l.id)}
-              <button role="menuitemradio" aria-checked={currentLayout(settings) === l.id} class:on={currentLayout(settings) === l.id}
-                onclick={() => ((layoutMenu = false), setLayout(l.id))}>
-                <Icon name={LAYOUT_ICONS[l.id]} size={18} /> {l.label}
-              </button>
-            {/each}
-          </div>
-        {/if}
-      </div>
-      <button class="icon-btn" class:active={panel === "settings"} title="Reading settings" onclick={() => (panel = panel === "settings" ? null : "settings")}><Icon name="type" /></button>
-    </div>
+    {#if toolbarTop}{@render toolbar(false)}{/if}
+    <button class="icon-btn" title="Settings" onclick={() => ((layoutMenu = false), (settingsOpen = true))}><Icon name="cog" /></button>
   </header>
 
   <div class="stage">
@@ -344,7 +402,19 @@
       <button class="edge right" title={engine?.rtl ? "Previous page" : "Next page"} onclick={() => (engine?.rtl ? engine?.prev() : engine?.next())}><Icon name="right" /></button>
     {/if}
 
-    {#if panel}
+    {#if panel === "position" && where && book}
+      <PositionSheet
+        manifest={book.manifest}
+        {where}
+        {fixed}
+        canGoBack={returnTo !== null}
+        onchapter={(i) => jump(() => engine?.goToHref(book!.manifest.spine[i]!.href))}
+        onchapterfraction={(f) => jump(() => engine?.goToChapterFraction(f))}
+        onbookfraction={(f) => jump(() => engine?.goToFraction(f))}
+        onback={goBack}
+        onclose={() => (panel = null)}
+      />
+    {:else if panel && panel !== "position"}
       <aside class="side" aria-label={panel}>
         {#if panel === "toc" && book}
           <h2>Contents</h2>
@@ -365,24 +435,20 @@
   </div>
 
   <footer class="bar bottom">
-    <input
-      class="progress"
-      type="range"
-      min="0"
-      max="1000"
-      aria-label="Position in book"
-      value={Math.round((scrub ?? where?.progression ?? 0) * 1000)}
-      oninput={(e) => (scrub = Number((e.currentTarget as HTMLInputElement).value) / 1000)}
-      onchange={(e) => {
-        const f = Number((e.currentTarget as HTMLInputElement).value) / 1000;
-        scrub = null;
-        void engine?.goToFraction(f);
-      }}
-    />
-    <span class="pos">
-      {#if where && where.pages > 0}<span>{pageLabel}</span><span class="dot">·</span>{/if}<span>{pct}%</span>
-    </span>
+    {#if !toolbarTop}{@render toolbar(true)}{/if}
+    <button class="pos" title="Tap to switch: pages left / percent" onclick={cycleProgress}>
+      <span class="pos-label" aria-hidden="true">{posLabel}</span>
+      <span class="sr-only pos-full">{posFull}</span>
+    </button>
+    <button class="icon-btn hide-btn" title="Hide controls" onclick={() => ((layoutMenu = false), (panel = null), (chrome = false))}><Icon name="down" /></button>
   </footer>
+
+  {#if !chrome && !panel && !settingsOpen}
+    <button class="show-handle" title="Show controls" onclick={() => (chrome = true)}><Icon name="up" size={18} /></button>
+  {/if}
+  {#if settingsOpen}
+    <SettingsScreen {fixed} onclose={() => (settingsOpen = false)} />
+  {/if}
 
   {#if selection}
     <!-- Phones show their own Copy/Share bar for selections, so ours omits Copy there. -->
@@ -411,34 +477,47 @@
     padding: 6px 10px;
   }
   .top,
-  .progress,
-  .pos {
+  .bottom > :global(*) {
     transition: opacity 0.2s, visibility 0.2s;
   }
-  /* Hidden chrome: the toolbar and slider go away; the page / % line stays, faintly. */
+  /* Hidden controls: both bars go away and nothing hidden reacts to taps
+     or clicks. The page indicator stays, faintly; the handle brings them back. */
   .hide-chrome .top,
-  .hide-chrome .progress {
+  .hide-chrome .bottom > :global(:not(.pos)) {
     opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
   }
   .hide-chrome .pos {
     opacity: 0.55;
+    pointer-events: none;
   }
-  /* Touch screens: hidden controls must not react to taps (a tap in the middle brings them back). */
-  @media (hover: none) {
-    .hide-chrome .top,
-    .hide-chrome .progress {
-      visibility: hidden;
-      pointer-events: none;
-    }
+  .show-handle {
+    position: absolute;
+    right: 10px;
+    bottom: 8px;
+    z-index: 20;
+    width: 34px;
+    height: 34px;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    border: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--muted);
+    opacity: 0.7;
+    cursor: pointer;
   }
-  /* Mouse: hovering a hidden bar reveals it. */
-  @media (hover: hover) {
-    .hide-chrome .top:hover,
-    .hide-chrome .top:focus-within,
-    .hide-chrome .bottom:hover .progress,
-    .hide-chrome .progress:focus {
-      opacity: 1;
-    }
+  .show-handle:hover {
+    opacity: 1;
+  }
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
   }
   .titles {
     flex: 1;
@@ -480,6 +559,12 @@
     border: 1px solid var(--border);
     border-radius: 10px;
     box-shadow: 0 8px 28px rgba(0, 0, 0, 0.18);
+  }
+  .layout-menu.up {
+    top: auto;
+    bottom: 40px;
+    left: 0;
+    right: auto;
   }
   .layout-menu button {
     display: flex;
@@ -529,6 +614,12 @@
   }
   /* Phones: compact bars and bottom-sheet panels. */
   @media (max-width: 640px) {
+    /* Room is tight next to the buttons: let the indicator use two short lines. */
+    .bottom .pos {
+      white-space: normal;
+      line-height: 1.25;
+      font-size: 12px;
+    }
     .chapter {
       display: none;
     }
@@ -547,9 +638,6 @@
       border-top: 1px solid var(--border);
       border-radius: 16px 16px 0 0;
       box-shadow: 0 -12px 32px rgba(0, 0, 0, 0.18) !important;
-    }
-    .pos {
-      min-width: 0;
     }
   }
   .side {
@@ -573,21 +661,27 @@
     margin: 14px 18px 6px;
   }
   .bottom {
-    gap: 14px;
-    padding: 6px 18px 10px;
-  }
-  .progress {
-    flex: 1;
-    accent-color: var(--accent);
-  }
-  .dot {
-    margin: 0 6px;
+    position: relative;
+    gap: 8px;
+    padding: 4px 10px 8px;
   }
   .pos {
+    flex: 1;
+    min-width: 0;
+    border: 0;
+    background: none;
+    padding: 6px 4px;
+    cursor: pointer;
+    font: inherit;
     font-size: 12.5px;
     color: var(--muted);
-    min-width: 130px;
     text-align: right;
     font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .hide-btn {
+    flex: none;
   }
 </style>
