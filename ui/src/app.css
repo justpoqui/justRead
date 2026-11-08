@@ -3,6 +3,11 @@
 /* App chrome. Colors are CSS variables set from the active reading theme
    (see App.svelte), so the library and toolbars match the page. */
 :root {
+  /* Safe areas (notches, home indicator); 0 on desktop. */
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
   --bg: #fdfcf9;
   --fg: #1f1f1f;
   --muted: #6b6b6b;
@@ -26,6 +31,19 @@ body,
   margin: 0;
   height: 100%;
   overflow: hidden;
+}
+#app {
+  box-sizing: border-box;
+  padding: var(--safe-top) var(--safe-right) var(--safe-bottom) var(--safe-left);
+  /* No grey tap flash or callout menus on the app chrome (book text still selects). */
+  -webkit-tap-highlight-color: transparent;
+}
+/* Touch devices: comfortable targets. */
+@media (pointer: coarse) {
+  .icon-btn {
+    min-width: 44px;
+    height: 44px;
+  }
 }
 
 button {

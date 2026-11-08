@@ -1,6 +1,10 @@
 // Copyright 2026 The justRead Authors
 // SPDX-License-Identifier: Apache-2.0
 
+// Phones and tablets use a native browser screen instead (planned, see ADR 0008);
+// until then the window/webview code below is desktop-only and unused there.
+#![cfg_attr(mobile, allow(dead_code, unused_imports))]
+
 //! justBrowse — a privacy-hardened browser for finding free books.
 //!
 //! One window ("browse") holds two webviews:
@@ -40,6 +44,7 @@ pub const WINDOW: &str = "browse";
 pub const CHROME: &str = "browse-chrome";
 pub const CONTENT: &str = "browse-content";
 /// Height of the toolbar webview (logical px).
+#[cfg(desktop)]
 const BAR: f64 = 96.0;
 
 /// Browser state shared by commands and webview callbacks.
@@ -68,6 +73,7 @@ struct DownloadStatus {
     message: String,
 }
 
+#[cfg(desktop)]
 /// Start the proxy once per app run.
 fn ensure_proxy(app: &AppHandle) -> Result<std::net::SocketAddr, String> {
     let st = app.state::<BrowseState>();
@@ -101,6 +107,7 @@ fn gate(app: &AppHandle) -> Option<Arc<Gate>> {
     app.state::<BrowseState>().gate.get().cloned()
 }
 
+#[cfg(desktop)]
 /// Open (or focus) the browser window.
 pub fn open(app: &AppHandle) -> Result<(), String> {
     if let Some(w) = app.get_window(WINDOW) {
@@ -199,6 +206,7 @@ pub fn open(app: &AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+#[cfg(desktop)]
 /// Linux: Tauri places child webviews in the window's vertical `gtk::Box`,
 /// where explicit bounds are ignored and space is shared evenly. Give the
 /// toolbar a fixed height and let the content take the remaining space.
@@ -220,6 +228,7 @@ fn pack_linux(chrome: &tauri::Webview, content: &tauri::Webview) {
     let _ = (chrome, content);
 }
 
+#[cfg(desktop)]
 /// Toolbar on top (BAR px), web content filling the rest.
 fn layout(app: &AppHandle) {
     let Some(w) = app.get_window(WINDOW) else {
@@ -237,6 +246,7 @@ fn layout(app: &AppHandle) {
     }
 }
 
+#[cfg(desktop)]
 /// Refuse third-party cookies in the content webview.
 ///
 /// * Linux (WebKitGTK): set explicitly on the webview's (ephemeral) cookie manager.
@@ -258,6 +268,7 @@ fn block_third_party_cookies(webview: &tauri::Webview) {
     let _ = webview;
 }
 
+#[cfg(desktop)]
 /// Top-level navigation policy (see policy::navigation).
 fn navigation_allowed(app: &AppHandle, url: &Url) -> bool {
     let allowed = gate(app)
@@ -273,6 +284,7 @@ fn navigation_allowed(app: &AppHandle, url: &Url) -> bool {
     }
 }
 
+#[cfg(desktop)]
 /// Downloads: save into a private folder, then import books into the library.
 fn on_download(app: &AppHandle, event: DownloadEvent<'_>) -> bool {
     let st = app.state::<BrowseState>();
@@ -335,6 +347,7 @@ fn on_download(app: &AppHandle, event: DownloadEvent<'_>) -> bool {
     }
 }
 
+#[cfg(desktop)]
 fn import_download(app: &AppHandle, path: &std::path::Path, name: String) -> DownloadStatus {
     let state = app.state::<AppState>();
     // Files that aren't books (no adapter recognizes them) are discarded.
@@ -426,7 +439,15 @@ fn search_template(state: &AppState) -> String {
 /// Reader window: open justBrowse.
 #[tauri::command]
 pub fn open_browser(app: AppHandle) -> Result<(), String> {
-    open(&app)
+    #[cfg(desktop)]
+    return open(&app);
+    // Phones/tablets have no multi-webview windows; a native browser screen is planned
+    // (docs/adr/0008-justbrowse.md).
+    #[cfg(mobile)]
+    {
+        let _ = app;
+        Err("justBrowse is not available on phones and tablets yet.".into())
+    }
 }
 
 /// Toolbar: go to a URL or search for the text. Returns the resolved URL so

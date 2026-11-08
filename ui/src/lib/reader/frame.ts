@@ -3,6 +3,8 @@
 
 // Creating chapter iframes and wiring their events to the engine.
 
+import { GestureTracker, points } from "./gestures";
+
 /** Callbacks a view receives from a chapter document. */
 export interface FrameHooks {
   key(e: KeyboardEvent): void;
@@ -12,6 +14,8 @@ export interface FrameHooks {
   /** Click on plain text/background; x,y are relative to the iframe viewport. */
   tap(x: number, y: number, frame: HTMLIFrameElement): void;
   wheel(e: WheelEvent): void;
+  /** Horizontal swipe inside the chapter (touch screens). */
+  swipe(direction: "left" | "right"): void;
 }
 
 /**
@@ -72,12 +76,38 @@ export function wireFrame(doc: Document, spine: number, frame: HTMLIFrameElement
   const onUp = () => setTimeout(() => hooks.selection(doc, spine, frame), 0);
   const onWheel = (e: WheelEvent) => hooks.wheel(e);
 
+  // STEP 3: touch — swipes turn pages; long-press selections are reported via
+  // selectionchange because phones send no mouseup after selecting.
+  const tracker = new GestureTracker();
+  const onTouchStart = (e: TouchEvent) => tracker.touch(points(e.touches), e.timeStamp, true);
+  const onTouchMove = (e: TouchEvent) => tracker.touch(points(e.touches), e.timeStamp, false);
+  const onTouchEnd = (e: TouchEvent) => {
+    if (e.touches.length > 0) return;
+    const g = tracker.end(e.timeStamp);
+    const sel = doc.getSelection();
+    if (g?.kind === "swipe" && (!sel || sel.isCollapsed)) hooks.swipe(g.direction);
+  };
+  let selTimer = 0;
+  const onSelectionChange = () => {
+    clearTimeout(selTimer);
+    selTimer = window.setTimeout(() => hooks.selection(doc, spine, frame), 350);
+  };
+
   doc.addEventListener("keydown", onKey);
   doc.addEventListener("click", onClick);
   doc.addEventListener("mouseup", onUp);
   doc.addEventListener("keyup", onUp);
   doc.addEventListener("wheel", onWheel, { passive: false });
+  doc.addEventListener("touchstart", onTouchStart, { passive: true });
+  doc.addEventListener("touchmove", onTouchMove, { passive: true });
+  doc.addEventListener("touchend", onTouchEnd, { passive: true });
+  doc.addEventListener("selectionchange", onSelectionChange);
   return () => {
+    clearTimeout(selTimer);
+    doc.removeEventListener("touchstart", onTouchStart);
+    doc.removeEventListener("touchmove", onTouchMove);
+    doc.removeEventListener("touchend", onTouchEnd);
+    doc.removeEventListener("selectionchange", onSelectionChange);
     doc.removeEventListener("keydown", onKey);
     doc.removeEventListener("click", onClick);
     doc.removeEventListener("mouseup", onUp);

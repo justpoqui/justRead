@@ -11,8 +11,6 @@
 //! * inputs are validated here or in the library crate — the webview is
 //!   treated as untrusted.
 
-use std::path::PathBuf;
-
 use justbook::Manifest;
 use justread_library::{
     import::is_drm_error, Annotation, AnnotationPatch, BookQuery, BookSummary, ImportOutcome,
@@ -73,7 +71,22 @@ pub async fn import_books(app: AppHandle, paths: Vec<String>) -> CmdResult<Vec<I
             .into_iter()
             .map(|path| {
                 // STEP 2: one file at a time; a failure never aborts the batch.
-                let result = state.lib().import(&PathBuf::from(&path), &state.registry);
+                // Paths or URIs (Android content://, iOS/macOS file://) are accepted.
+                let (file, temporary) = match crate::open_files::materialize(&app, &path) {
+                    Ok(f) => f,
+                    Err(e) => {
+                        return ImportResult {
+                            path,
+                            outcome: None,
+                            drm: false,
+                            error: Some(e),
+                        }
+                    }
+                };
+                let result = state.lib().import(&file, &state.registry);
+                if temporary {
+                    let _ = std::fs::remove_file(&file);
+                }
                 match result {
                     Ok(outcome) => ImportResult {
                         path,

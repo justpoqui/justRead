@@ -66,7 +66,7 @@ img { filter: brightness(0.9); }`);
   if (layout.kind === "paginated") {
     const g = layout.geometry;
     parts.push(`
-html { height: ${g.frameHeight}px !important; overflow: hidden !important; }
+html { height: ${g.frameHeight}px !important; overflow: hidden !important; touch-action: pan-y; }
 body { height: ${g.frameHeight}px !important; box-sizing: border-box;
   column-width: ${g.columnWidth}px !important; column-gap: ${g.gap}px !important; column-fill: auto !important;
   max-width: none !important; width: auto !important; }

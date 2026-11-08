@@ -53,6 +53,79 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
+    ],
+    "fileAssociations": [
+      {
+        "ext": [
+          "epub"
+        ],
+        "name": "EPUB book",
+        "role": "Viewer",
+        "rank": "Default",
+        "mimeType": "application/epub+zip",
+        "contentTypes": [
+          "org.idpf.epub-container"
+        ]
+      },
+      {
+        "ext": [
+          "mobi",
+          "azw",
+          "prc"
+        ],
+        "name": "Mobipocket book",
+        "role": "Viewer",
+        "rank": "Default",
+        "mimeType": "application/x-mobipocket-ebook"
+      },
+      {
+        "ext": [
+          "azw3"
+        ],
+        "name": "Kindle book (KF8)",
+        "role": "Viewer",
+        "rank": "Default",
+        "mimeType": "application/vnd.amazon.mobi8-ebook"
+      },
+      {
+        "ext": [
+          "fb2"
+        ],
+        "name": "FictionBook",
+        "role": "Viewer",
+        "rank": "Default",
+        "mimeType": "application/x-fictionbook+xml"
+      },
+      {
+        "ext": [
+          "cbz"
+        ],
+        "name": "Comic book (ZIP)",
+        "role": "Viewer",
+        "rank": "Default",
+        "mimeType": "application/vnd.comicbook+zip"
+      },
+      {
+        "ext": [
+          "cb7"
+        ],
+        "name": "Comic book (7-Zip)",
+        "role": "Viewer",
+        "rank": "Default",
+        "mimeType": "application/x-cb7"
+      },
+      {
+        "ext": [
+          "pdf"
+        ],
+        "name": "PDF document",
+        "role": "Viewer",
+        "rank": "Alternate",
+        "mimeType": "application/pdf",
+        "contentTypes": [
+          "com.adobe.pdf"
+        ]
+      }
     ]
   }
 }

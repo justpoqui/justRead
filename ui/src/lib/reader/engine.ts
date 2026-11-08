@@ -301,6 +301,13 @@ export class ReaderEngine implements Engine {
         else if (this.settings.flow === "paginated" && hx > third * 2) void this.next();
         else this.emit("center", undefined);
       },
+      swipe: (direction) => {
+        // Paginated only (scrolling uses the native vertical pan). Swiping
+        // left reveals the next page, mirrored for right-to-left books.
+        if (this.settings.flow !== "paginated") return;
+        const forward = direction === "left";
+        void (forward ? this.next() : this.prev());
+      },
       wheel: (e) => {
         if (this.settings.flow !== "paginated") return;
         e.preventDefault();

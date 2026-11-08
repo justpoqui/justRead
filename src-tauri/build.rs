@@ -28,6 +28,7 @@ const COMMANDS: &[&str] = &[
     "update_annotation",
     "delete_annotation",
     // justBrowse (granted to the toolbar webview only, except open_browser)
+    "take_pending_open",
     "open_browser",
     "browse_navigate",
     "browse_history",

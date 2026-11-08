@@ -7,6 +7,7 @@
 
 mod browse;
 mod commands;
+mod open_files;
 mod protocol;
 mod state;
 
@@ -16,8 +17,12 @@ use tauri::Manager;
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
-        // STEP 1: only the dialog plugin — used for the "Import" file picker.
+        // STEP 1: the dialog plugin (Import picker) and the fs plugin, used only
+        // from Rust to read files the OS hands us as URIs. No webview is granted
+        // any fs permission.
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_fs::init())
+        .manage(open_files::PendingOpen::default())
         .manage(browse::BrowseState::default())
         // STEP 2: serve book packages to the reader iframe.
         .register_asynchronous_uri_scheme_protocol(protocol::SCHEME, protocol::handle)
@@ -26,6 +31,8 @@ pub fn run() {
             let data_dir = app.path().app_data_dir()?;
             let state = state::AppState::open(&data_dir)?;
             app.manage(state);
+            // Windows/Linux "Open with": files are passed as arguments.
+            open_files::push(app.handle(), open_files::from_args(std::env::args()));
             Ok(())
         })
         // STEP 4: the command surface (each one is also allow-listed in capabilities/main.json).
@@ -52,7 +59,15 @@ pub fn run() {
             browse::browse_allow_http,
             browse::browse_config,
             browse::browse_set_search,
+            open_files::take_pending_open,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running justRead");
+        .build(tauri::generate_context!())
+        .expect("error while building justRead")
+        .run(|_app, _event| {
+            // macOS/iOS/Android "Open with": files arrive as URLs while running.
+            #[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]
+            if let tauri::RunEvent::Opened { urls } = _event {
+                open_files::push(_app, urls.iter().map(|u| u.to_string()).collect());
+            }
+        });
 }

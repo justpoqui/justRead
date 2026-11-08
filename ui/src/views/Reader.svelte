@@ -496,6 +496,37 @@
   .edge:hover {
     opacity: 1;
   }
+  /* Touch screens: swipes and taps turn pages, so the edge arrows go. */
+  @media (pointer: coarse) {
+    .edge {
+      display: none;
+    }
+  }
+  /* Phones: compact bars and bottom-sheet panels. */
+  @media (max-width: 640px) {
+    .chapter {
+      display: none;
+    }
+    .titles {
+      justify-content: flex-start;
+    }
+    .actions {
+      gap: 0;
+    }
+    .side {
+      top: auto !important;
+      left: 0;
+      width: 100% !important;
+      max-height: 72%;
+      border-left: 0 !important;
+      border-top: 1px solid var(--border);
+      border-radius: 16px 16px 0 0;
+      box-shadow: 0 -12px 32px rgba(0, 0, 0, 0.18) !important;
+    }
+    .pos {
+      min-width: 0;
+    }
+  }
   .side {
     position: absolute;
     top: 0;

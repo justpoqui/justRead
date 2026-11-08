@@ -27,6 +27,7 @@
     "allow-add-annotation",
     "allow-update-annotation",
     "allow-delete-annotation",
-    "allow-open-browser"
+    "allow-open-browser",
+    "allow-take-pending-open"
   ]
 }

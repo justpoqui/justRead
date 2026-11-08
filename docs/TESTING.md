@@ -54,6 +54,14 @@ for Phase 3: PDF cover generation, PDF text actually drawn, spread/page locators
 lazy rendering, outline → TOC, zoom and fit-width, PDF bookmarks, comic natural order, cover-alone and
 landscape-alone spreads.
 
+**Phone (Chromium, Pixel 7 emulation):** `node e2e/mobile.mjs /tmp/jr-lib /tmp/mshots` — real touch
+input via the DevTools protocol: phone viewport and no sideways scrolling, swipe page turns (EPUB and
+comic), long-press-style selection → highlight menu, bottom-sheet panels, pinch zoom in/out, swiping
+pans when zoomed.
+
+**Open with (real app):** `node e2e/openwith.mjs ../target/debug/justread-app /tmp/book.fb2` starts the app
+with a file argument and checks it is imported and opened.
+
 **justBrowse (WebKitGTK, real app):** a local Node server plays "the web"; its page tries to call Tauri
 commands, emit events, open dialogs, read `justbook://` files and storage, and reports the results
 from inside the sandbox. The run checks: toolbar-only IPC, HTTP warning before any request, all escape

@@ -28,6 +28,8 @@ serde_json.workspace = true
 # used by justBrowse (docs/adr/0008-justbrowse.md).
 tauri = { version = "2", features = ["unstable"] }  # Apache-2.0 OR MIT
 tauri-plugin-dialog = "2"                         # Apache-2.0 OR MIT
+# Reads files the OS hands us as URIs (Android content://, iOS security-scoped).
+tauri-plugin-fs = "2"                             # Apache-2.0 OR MIT
 # Already in the dependency tree via Tauri; used directly by the justBrowse proxy.
 tokio = { version = "1", features = ["net", "io-util", "time", "rt", "sync", "macros"] } # MIT
 

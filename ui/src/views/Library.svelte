@@ -12,6 +12,7 @@
   import { libraryPrefs, saveLibraryPrefs } from "../lib/settings/store.svelte";
   import { toast } from "../lib/stores/toasts.svelte";
   import { packageUrl } from "../lib/ipc/api";
+  import { isMobile } from "../lib/platform";
 
   let { onopen }: { onopen: (id: string) => void } = $props();
 
@@ -66,17 +67,27 @@
   });
 
   // STEP 2: importing (file picker or drag-and-drop share this path).
-  async function importPaths(paths: string[]) {
+  async function importPaths(paths: string[], openAfter = false) {
     if (paths.length === 0) return;
     importing = true;
     try {
-      report(await api.importBooks(paths));
+      const results = await api.importBooks(paths);
+      report(results);
       await refresh();
+      // "Open with justRead": go straight to the (first) book.
+      const first = results.find((r) => r.outcome)?.outcome?.book;
+      if (openAfter && first) onopen(first.id);
     } catch (e) {
       toast(String(e), "error");
     } finally {
       importing = false;
     }
+  }
+
+  /** Files the OS asked us to open (launch arguments, share sheet, "Open with"). */
+  async function openPending() {
+    const files = (await api.takePendingOpen().catch(() => null)) ?? [];
+    if (files.length) await importPaths(files, true);
   }
 
   function report(results: ImportResult[]) {
@@ -128,9 +139,16 @@
     listen("library-changed", () => void refresh())
       .then((u) => (unlistenLib = u))
       .catch(() => {});
+    // "Open with": files queued before we started, and any that arrive later.
+    void openPending();
+    let unlistenOpen: (() => void) | undefined;
+    listen("open-files", () => void openPending())
+      .then((u) => (unlistenOpen = u))
+      .catch(() => {});
     return () => {
       unlisten?.();
       unlistenLib?.();
+      unlistenOpen?.();
     };
   });
 
@@ -171,9 +189,11 @@
       >
         <Icon name={libraryPrefs.view === "grid" ? "list" : "grid"} />
       </button>
-      <button class="btn" title="Find free books online (justBrowse)" onclick={() => api.openBrowser().catch((e) => toast(String(e), "error"))}>
-        <Icon name="globe" size={16} /> Find books
-      </button>
+      {#if !isMobile}
+        <button class="btn" title="Find free books online (justBrowse)" onclick={() => api.openBrowser().catch((e) => toast(String(e), "error"))}>
+          <Icon name="globe" size={16} /> Find books
+        </button>
+      {/if}
       <button class="btn primary" onclick={pickFiles} disabled={importing}>
         <Icon name="plus" size={16} />
         {importing ? "Importing…" : "Import"}
@@ -330,6 +350,11 @@
     height: 100%;
     background: var(--accent);
   }
+  @media (hover: none) {
+    .del {
+      opacity: 0.85 !important;
+    }
+  }
   .del {
     position: absolute;
     top: 6px;
@@ -378,6 +403,26 @@
   .empty h2 {
     color: var(--fg);
     margin: 12px 0 4px;
+  }
+  /* Phones: two-row header, smaller covers. */
+  @media (max-width: 640px) {
+    header {
+      flex-wrap: wrap;
+      gap: 8px 10px;
+      padding: 10px 12px;
+    }
+    .search {
+      order: 3;
+      flex-basis: 100%;
+      max-width: none;
+    }
+    main {
+      padding: 16px 12px 40px;
+    }
+    .grid {
+      grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+      gap: 20px 12px;
+    }
   }
   .drop {
     position: fixed;

@@ -9,6 +9,7 @@ Policy: MIT, BSD, Apache-2.0, ISC or zlib (see CONTRIBUTING.md). Enforced by `ca
 |---|---|---|
 | tauri, tauri-build | App shell | Apache-2.0 OR MIT |
 | tauri-plugin-dialog | Import file picker | Apache-2.0 OR MIT |
+| tauri-plugin-fs | Reading files handed over as URIs (Android/iOS), Rust side only | Apache-2.0 OR MIT |
 | rusqlite (`bundled`) | SQLite access | MIT (SQLite itself: public domain) |
 | zip | EPUB container | MIT |
 | quick-xml | OPF/NCX/nav/XHTML parsing | MIT |

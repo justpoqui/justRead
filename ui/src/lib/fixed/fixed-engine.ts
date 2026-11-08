@@ -21,6 +21,7 @@ import type { Engine, EngineEvents } from "../reader/engine";
 import { formatLocator, parseLocator, type FixedLocator } from "../reader/locator";
 import { buildSpreads, fitScreen, screenOfPage, scrollPageSize, type Size } from "./layout";
 import type { PageSource } from "./sources";
+import { GestureTracker, points } from "../reader/gestures";
 
 type Listener<T> = (v: T) => void;
 
@@ -65,6 +66,7 @@ export class FixedEngine implements Engine {
     // STEP 2: interaction.
     this.root.addEventListener("click", (e) => this.onClick(e));
     this.root.addEventListener("wheel", (e) => this.onWheel(e), { passive: false });
+    this.wireTouch();
     this.root.addEventListener("scroll", () => {
       if (this.suppressScroll) return;
       cancelAnimationFrame(this.scrollRaf);
@@ -354,6 +356,27 @@ export class FixedEngine implements Engine {
     if (this.settings.flow === "paginated" && x < third) void (this.rtl ? this.next() : this.prev());
     else if (this.settings.flow === "paginated" && x > third * 2) void (this.rtl ? this.prev() : this.next());
     else this.emit("center", undefined);
+  }
+
+  /** Swipe to turn pages (unless zoomed in, when one finger pans), pinch to zoom. */
+  private wireTouch() {
+    const tracker = new GestureTracker();
+    this.root.style.touchAction = "pan-x pan-y"; // we handle pinch ourselves
+    this.root.addEventListener("touchstart", (e) => tracker.touch(points(e.touches), e.timeStamp, true), { passive: true });
+    this.root.addEventListener("touchmove", (e) => {
+      tracker.touch(points(e.touches), e.timeStamp, false);
+      if (e.touches.length > 1) e.preventDefault(); // no browser page-zoom
+    }, { passive: false });
+    this.root.addEventListener("touchend", (e) => {
+      if (e.touches.length > 0) return;
+      const g = tracker.end(e.timeStamp);
+      if (g?.kind === "pinch") this.emit("zoom", g.scale);
+      else if (g?.kind === "swipe" && this.settings.flow === "paginated" && this.root.scrollWidth <= this.root.clientWidth + 1) {
+        // Swipe left = forward, mirrored for right-to-left comics.
+        const forward = (g.direction === "left") !== this.rtl;
+        void (forward ? this.next() : this.prev());
+      }
+    }, { passive: true });
   }
 
   private wheelLock = 0;

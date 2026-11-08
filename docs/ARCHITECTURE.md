@@ -1,6 +1,6 @@
 # justRead architecture
 
-_Last updated: Phase 5 complete (justBrowse, desktop)._
+_Last updated: Phase 6 in progress (mobile UI, Open with, mobile CI builds)._
 
 ## Overview
 
@@ -151,6 +151,26 @@ user accepted the warning for that host, and refuses local destinations after DN
 Navigation policy and address-bar parsing are pure functions in `policy.rs` (DuckDuckGo by default;
 any `https://…{q}` template such as SearXNG). Book downloads are imported and the reader's library
 refreshes via a `library-changed` event. Details and platform caveats: adr/0008-justbrowse.md.
+
+## Mobile and "Open with" (Phase 6)
+
+* **File associations** (tauri.conf.json `bundle.fileAssociations`): EPUB, MOBI/AZW/PRC, AZW3, FB2,
+  CBZ, CB7 as default viewer; PDF as an alternate. These generate desktop installer associations,
+  iOS document types and Android intent filters.
+* **Receiving files** (`src-tauri/src/open_files.rs`): Windows/Linux get paths as launch arguments;
+  macOS/iOS/Android get URLs via `RunEvent::Opened`. Files are queued; the library takes the queue on
+  start (and on `open-files` events), imports, and opens the book.
+* **URIs**: `import_books` accepts paths or `file://`/`content://` URIs; URIs are copied through the
+  fs plugin's Rust API (Android content resolver, iOS security-scoped access) into a private folder.
+  No webview is granted fs permissions.
+* **Touch** (`ui/src/lib/reader/gestures.ts`): swipe to turn pages in both engines (mirrored for RTL
+  comics), pinch to zoom PDFs/comics (one finger pans when zoomed), long-press selections reported via
+  `selectionchange`.
+* **Layout**: safe-area insets, compact header and bottom-sheet panels under 640px, larger touch
+  targets on coarse pointers, edge arrows hidden on touch screens.
+* **justBrowse** is desktop-only for now (`#[cfg(desktop)]`); phones get a clear message.
+* **Builds**: `.github/workflows/mobile.yml` builds an Android debug APK and attempts an iOS simulator
+  build. The Rust code is type-checked for `aarch64-linux-android`.
 
 ## Reader engine (`ui/src/lib/reader`)
 
