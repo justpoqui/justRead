@@ -1,0 +1,24 @@
+# Copyright 2026 The justRead Authors
+# SPDX-License-Identifier: Apache-2.0
+
+[package]
+name = "justread-formats"
+description = "Format adapters that convert source books into justBook packages."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+justbook.workspace = true
+thiserror.workspace = true
+zip.workspace = true
+quick-xml.workspace = true
+encoding_rs.workspace = true
+chardetng.workspace = true
+sha1.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+serde_json.workspace = true
+zip = { workspace = true, features = ["deflate"] }

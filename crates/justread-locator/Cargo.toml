@@ -1,0 +1,17 @@
+# Copyright 2026 The justRead Authors
+# SPDX-License-Identifier: Apache-2.0
+
+[package]
+name = "justread-locator"
+description = "Format-independent reading positions for justRead."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+serde.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true

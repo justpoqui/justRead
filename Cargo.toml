@@ -1,0 +1,41 @@
+# Copyright 2026 The justRead Authors
+# SPDX-License-Identifier: Apache-2.0
+
+[workspace]
+resolver = "2"
+members = [
+    "crates/justbook",
+    "crates/justread-locator",
+    "crates/justread-formats",
+    "crates/justread-library",
+    #"src-tauri",
+]
+
+[workspace.package]
+version = "0.2.0"
+edition = "2021"
+license = "Apache-2.0"
+authors = ["The justRead Authors"]
+repository = "https://github.com/justpoqui/justRead"
+rust-version = "1.80"
+
+[workspace.dependencies]
+# Internal crates
+justbook = { path = "crates/justbook" }
+justread-locator = { path = "crates/justread-locator" }
+justread-formats = { path = "crates/justread-formats" }
+justread-library = { path = "crates/justread-library" }
+
+# Third-party (licenses listed in docs/THIRD_PARTY.md)
+serde = { version = "1", features = ["derive"] }   # MIT OR Apache-2.0
+serde_json = "1"                                   # MIT OR Apache-2.0
+thiserror = "2"                                    # MIT OR Apache-2.0
+uuid = { version = "1", features = ["v4"] }        # MIT OR Apache-2.0
+sha2 = "0.10"                                      # MIT OR Apache-2.0
+sha1 = "0.10"                                      # MIT OR Apache-2.0
+zip = { version = "9", default-features = false, features = ["deflate"] } # MIT
+quick-xml = "0.42"                                 # MIT
+encoding_rs = "0.8"                                # (Apache-2.0 OR MIT) AND BSD-3-Clause
+chardetng = "1"                                    # Apache-2.0 OR MIT
+rusqlite = { version = "0.41", features = ["bundled"] } # MIT (SQLite: public domain)
+tempfile = "3"                                     # MIT OR Apache-2.0

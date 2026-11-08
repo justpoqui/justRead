@@ -1,0 +1,16 @@
+{
+  "_comment": "Shared test vectors for the locator grammar. Used by crates/justread-locator/tests/vectors.rs and ui/tests/locator.test.ts so both implementations stay identical.",
+  "valid": [
+    { "text": "f:0/0:0", "kind": "flow", "spine": 0, "block": 0, "offset": 0 },
+    { "text": "f:3/127:42", "kind": "flow", "spine": 3, "block": 127, "offset": 42 },
+    { "text": "f:4294967295/1:2", "kind": "flow", "spine": 4294967295, "block": 1, "offset": 2 },
+    { "text": "p:0@0", "kind": "fixed", "page": 0, "offset": 0 },
+    { "text": "p:12@0.25", "kind": "fixed", "page": 12, "offset": 0.25 },
+    { "text": "p:7@1", "kind": "fixed", "page": 7, "offset": 1 }
+  ],
+  "invalid": [
+    "", "f:", "f:1", "f:1/2", "f:1/2:", "f:-1/2:3", "f:1/2:3x", "f: 1/2:3", "f:01/2:3",
+    "f:4294967296/0:0", "p:1", "p:1@", "p:1@1.5", "p:1@-0.1", "p:x@0.5", "x:1/2:3", "F:1/2:3"
+  ],
+  "order": ["f:0/0:0", "f:0/0:5", "f:0/3:0", "f:1/0:0", "f:1/10:2", "f:2/0:0"]
+}
