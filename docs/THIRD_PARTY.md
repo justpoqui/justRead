@@ -75,5 +75,8 @@ lists (EasyList, AdGuard, Disconnect) were not used because of GPL/CC-BY-SA lice
 
 ## Fonts and artwork
 
-No fonts are bundled (ADR 0005). The app icon (`src-tauri/icons/icon.svg`) is original artwork,
-Apache-2.0. UI icons are original stroke drawings in `ui/src/components/Icon.svelte`.
+No fonts are bundled (ADR 0005). The app icon (the "JR" mark) is project artwork supplied by
+the author (`src-tauri/icons/source/artwork.png`), Apache-2.0. All platform sizes are generated from
+it: `python3 scripts/make-icon.py src-tauri/icons/source/artwork.png src-tauri/icons/source`, then
+`pnpm tauri icon src-tauri/icons/source/icon.json`, then the script again with
+`src-tauri/icons/android` as a third argument for the legacy Android launcher icons. UI icons are original stroke drawings in `ui/src/components/Icon.svelte`.

@@ -49,6 +49,10 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Generate the Android project
         run: pnpm tauri android init --ci
+      - name: Use the justRead launcher icons
+        # Generated projects start with Tauri's default icons; copy ours in
+        # (src-tauri/icons/android, made by `tauri icon` + scripts/make-icon.py).
+        run: cp -r src-tauri/icons/android/. src-tauri/gen/android/app/src/main/res/
       - name: Build a debug APK (arm64)
         run: pnpm tauri android build --debug --apk --target aarch64
       - uses: actions/upload-artifact@v4
@@ -76,5 +80,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Generate the Xcode project
         run: pnpm tauri ios init --ci
+      - name: Use the justRead app icons
+        run: cp src-tauri/icons/ios/*.png src-tauri/gen/apple/Assets.xcassets/AppIcon.appiconset/
       - name: Build for the iOS simulator
         run: pnpm tauri ios build --debug --target aarch64-sim
