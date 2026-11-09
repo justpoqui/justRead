@@ -14,12 +14,15 @@
 //! No network, no accounts, no telemetry.
 
 pub mod annotations;
+pub mod dates;
 pub mod db;
 pub mod error;
 pub mod export;
 pub mod import;
 pub mod models;
 pub mod settings;
+pub mod shelves;
+pub mod stats;
 
 use std::path::{Path, PathBuf};
 
@@ -99,16 +102,24 @@ impl Library {
             .as_deref()
             .map(|s| format!("%{}%", escape_like(s.trim())))
             .unwrap_or_else(|| "%".into());
+        // Shelf and collection filters are bound parameters (NULL = no filter).
         let sql = format!(
             "SELECT {cols} FROM books b LEFT JOIN progress p ON p.book_id = b.id
-             WHERE b.title LIKE ?1 ESCAPE '\\' OR b.authors LIKE ?1 ESCAPE '\\' OR COALESCE(b.series, '') LIKE ?1 ESCAPE '\\'
+             WHERE (b.title LIKE ?1 ESCAPE '\\' OR b.authors LIKE ?1 ESCAPE '\\' OR COALESCE(b.series, '') LIKE ?1 ESCAPE '\\')
+               AND (?2 IS NULL OR b.status = ?2)
+               AND (?3 IS NULL OR EXISTS (SELECT 1 FROM book_collections bc
+                                          WHERE bc.book_id = b.id AND bc.collection_id = ?3))
              ORDER BY {order}",
             cols = models::SUMMARY_COLUMNS
         );
 
         // STEP 3: run.
         let mut stmt = self.conn.prepare(&sql)?;
-        let rows = stmt.query_map(params![pattern], models::summary_from_row)?;
+        let status = q.status.map(|s| s.as_str());
+        let rows = stmt.query_map(
+            params![pattern, status, q.collection],
+            models::summary_from_row,
+        )?;
         Ok(rows.collect::<std::result::Result<_, _>>()?)
     }
 
@@ -172,10 +183,13 @@ impl Library {
         Ok(href)
     }
 
-    /// Record that a book was opened (drives "recently read").
+    /// Record that a book was opened (drives "recently read"); an unread
+    /// book moves to the Reading shelf.
     pub fn mark_opened(&self, book_id: &str) -> Result<()> {
         self.conn.execute(
-            "UPDATE books SET last_opened_at = ?2 WHERE id = ?1",
+            "UPDATE books SET last_opened_at = ?2,
+                    status = CASE status WHEN 'unread' THEN 'reading' ELSE status END
+             WHERE id = ?1",
             params![book_id, db::now_ms()],
         )?;
         Ok(())

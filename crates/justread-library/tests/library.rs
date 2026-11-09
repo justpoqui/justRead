@@ -301,3 +301,152 @@ fn fixed_layout_import_and_cover() {
         Some("cover.png")
     );
 }
+
+/// Phase 8: two imported books in a fresh library.
+fn two_books() -> (tempfile::TempDir, Library, BookSummary, BookSummary) {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut lib = Library::open(tmp.path()).unwrap();
+    let reg = Registry::with_defaults();
+    let a = txt(tmp.path(), "a.txt", "Title: Alpha\n\nOne.");
+    let b = txt(tmp.path(), "b.txt", "Title: Beta\n\nTwo.");
+    let ImportOutcome::Imported { book: ba, .. } = lib.import(&a, &reg).unwrap() else {
+        panic!()
+    };
+    let ImportOutcome::Imported { book: bb, .. } = lib.import(&b, &reg).unwrap() else {
+        panic!()
+    };
+    (tmp, lib, ba, bb)
+}
+
+fn query(status: Option<BookStatus>, collection: Option<&str>) -> BookQuery {
+    BookQuery {
+        status,
+        collection: collection.map(Into::into),
+        ..Default::default()
+    }
+}
+
+#[test]
+fn shelves_follow_opening_and_marking() {
+    let (_tmp, lib, a, b) = two_books();
+    // STEP 1: new books are unread; opening moves a book to Reading.
+    assert_eq!(lib.get_book(&a.id).unwrap().status, BookStatus::Unread);
+    lib.mark_opened(&a.id).unwrap();
+    assert_eq!(lib.get_book(&a.id).unwrap().status, BookStatus::Reading);
+    // STEP 2: finished records a date; opening again keeps it finished.
+    lib.set_status(&a.id, BookStatus::Finished).unwrap();
+    lib.mark_opened(&a.id).unwrap();
+    let fa = lib.get_book(&a.id).unwrap();
+    assert_eq!(fa.status, BookStatus::Finished);
+    assert!(fa.finished_at.is_some());
+    // STEP 3: shelf filter.
+    let unread: Vec<_> = lib
+        .list_books(&query(Some(BookStatus::Unread), None))
+        .unwrap();
+    assert_eq!(
+        unread.iter().map(|x| &x.id).collect::<Vec<_>>(),
+        vec![&b.id]
+    );
+    // Back to Reading clears the finish date.
+    lib.set_status(&a.id, BookStatus::Reading).unwrap();
+    assert_eq!(lib.get_book(&a.id).unwrap().finished_at, None);
+    assert!(lib.set_status("nope", BookStatus::Reading).is_err());
+}
+
+#[test]
+fn collections_lifecycle() {
+    let (_tmp, lib, a, b) = two_books();
+    let scifi = lib.create_collection("  Sci-fi  ").unwrap();
+    assert_eq!(scifi.name, "Sci-fi");
+    assert!(
+        lib.create_collection("sci-FI").is_err(),
+        "names are unique ignoring case"
+    );
+    assert!(lib.create_collection("   ").is_err());
+    let club = lib.create_collection("Book club").unwrap();
+
+    lib.set_in_collection(&a.id, &scifi.id, true).unwrap();
+    lib.set_in_collection(&a.id, &scifi.id, true).unwrap(); // idempotent
+    lib.set_in_collection(&a.id, &club.id, true).unwrap();
+    lib.set_in_collection(&b.id, &club.id, true).unwrap();
+    assert!(lib.set_in_collection(&a.id, "missing", true).is_err());
+
+    let mut ca = lib.get_book(&a.id).unwrap().collections;
+    ca.sort();
+    let mut want = vec![scifi.id.clone(), club.id.clone()];
+    want.sort();
+    assert_eq!(ca, want);
+    let in_scifi = lib.list_books(&query(None, Some(&scifi.id))).unwrap();
+    assert_eq!(in_scifi.len(), 1);
+    let names: Vec<_> = lib
+        .list_collections()
+        .unwrap()
+        .into_iter()
+        .map(|c| (c.name, c.count))
+        .collect();
+    assert_eq!(
+        names,
+        vec![("Book club".to_string(), 2), ("Sci-fi".to_string(), 1)]
+    );
+
+    lib.rename_collection(&club.id, "Club").unwrap();
+    assert!(lib.rename_collection(&club.id, "sci-fi").is_err());
+    lib.set_in_collection(&b.id, &club.id, false).unwrap();
+    lib.delete_collection(&scifi.id).unwrap();
+    assert_eq!(
+        lib.get_book(&a.id).unwrap().collections,
+        vec![club.id.clone()]
+    );
+    assert_eq!(
+        lib.list_books(&query(None, None)).unwrap().len(),
+        2,
+        "deleting a collection keeps its books"
+    );
+}
+
+#[test]
+fn reading_time_streaks_and_pace() {
+    let (_tmp, lib, a, b) = two_books();
+    // STEP 1: three days in a row, then a gap; jumps don't count as progress.
+    lib.record_reading(&a.id, "2026-11-07", 300, 0.01).unwrap();
+    lib.record_reading(&a.id, "2026-11-08", 600, 0.02).unwrap();
+    lib.record_reading(&b.id, "2026-11-08", 120, 0.0).unwrap();
+    lib.record_reading(&a.id, "2026-11-09", 60, 0.40).unwrap(); // a jump: time counts, progress doesn't
+    lib.record_reading(&a.id, "2026-11-01", 30, 0.0).unwrap();
+    // Invalid input is rejected.
+    assert!(lib.record_reading(&a.id, "2026-02-30", 60, 0.0).is_err());
+    assert!(lib.record_reading(&a.id, "2026-11-09", 0, 0.0).is_err());
+    assert!(lib.record_reading(&a.id, "2026-11-09", 5000, 0.0).is_err());
+    assert!(lib
+        .record_reading("missing", "2026-11-09", 60, 0.0)
+        .is_err());
+
+    // STEP 2: library stats on the 9th.
+    let s = lib.reading_stats("2026-11-09", 14).unwrap();
+    assert_eq!(s.today_seconds, 60);
+    assert_eq!(s.week_seconds, 300 + 600 + 120 + 60);
+    assert_eq!(s.total_seconds, 300 + 600 + 120 + 60 + 30);
+    assert_eq!(s.streak_days, 3);
+    assert_eq!(s.daily.len(), 14);
+    assert_eq!(s.daily.last().unwrap().day, "2026-11-09");
+    assert_eq!(s.daily[13 - 1].seconds, 720);
+    // A day without reading yet keeps yesterday's streak alive.
+    assert_eq!(lib.reading_stats("2026-11-10", 7).unwrap().streak_days, 3);
+    assert_eq!(lib.reading_stats("2026-11-11", 7).unwrap().streak_days, 0);
+
+    // STEP 3: per-book pace: 990 s for 3 % → the remaining 70 % ≈ 23 100 s.
+    lib.save_progress(&a.id, &loc("f:0/0:0"), 0.30).unwrap();
+    let bs = lib.book_stats(&a.id).unwrap();
+    assert_eq!(bs.seconds, 990);
+    assert_eq!(bs.days_read, 4);
+    assert_eq!(bs.first_day.as_deref(), Some("2026-11-01"));
+    assert!((bs.progress_read - 0.03).abs() < 1e-9);
+    assert_eq!(bs.seconds_left, Some(23_100));
+    // Not enough data → no estimate.
+    assert_eq!(lib.book_stats(&b.id).unwrap().seconds_left, None);
+    // Finished books count toward the year.
+    lib.set_status(&b.id, BookStatus::Finished).unwrap();
+    let year = justread_library::export::iso_date(justread_library::db::now_ms());
+    let s = lib.reading_stats(&year, 7).unwrap();
+    assert_eq!((s.books_finished, s.finished_this_year), (1, 1));
+}

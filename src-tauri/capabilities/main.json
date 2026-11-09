@@ -31,6 +31,15 @@
     "allow-export-annotations",
     "allow-share-annotations",
     "allow-save-annotations",
+    "allow-set-book-status",
+    "allow-list-collections",
+    "allow-create-collection",
+    "allow-rename-collection",
+    "allow-delete-collection",
+    "allow-set-in-collection",
+    "allow-record-reading",
+    "allow-reading-stats",
+    "allow-book-stats",
     "allow-open-browser",
     "allow-take-pending-open"
   ]

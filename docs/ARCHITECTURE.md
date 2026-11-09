@@ -258,6 +258,26 @@ The **Export** row in the Highlights panel sends it anywhere:
   supplies a path; Android/iOS document URLs are written through the fs plugin.
 - **Copy**: the text on the clipboard.
 
+### Reading stats and library organisation (Phase 8)
+
+- **Shelves:** `books.status` is `unread` / `reading` / `finished` (schema v3). Opening a book
+  moves it from Unread to Reading; reaching the last page offers "Mark as finished" (once per
+  visit); the book options sheet (⋯ on a book) changes it any time. `finished_at` records when.
+- **Collections:** user-named groups (`collections`, `book_collections`; names unique ignoring
+  case, 1–60 chars). A book can be in several; deleting a collection keeps its books.
+- **Reading time:** `ui/src/lib/stats/tracker.ts` counts only *active* reading — the app visible
+  and a page turn/scroll/selection in the last 2 minutes — and reports about once a minute, on
+  hide and on close, per local calendar day. Forward movement is summed for the reader's pace;
+  jumps over 2 % (contents, position popup) and going back are ignored. The backend
+  (`justread-library/src/stats.rs`) validates every report (real date, 1–600 s, progress ≤ 5 %).
+  Stored in `reading_days`, on this device only.
+- **Stats screen:** today, last 7 days, streak (today or yesterday back), finished this year,
+  and a 14-day bar chart with hover values and a table view. Per book (in the options sheet):
+  time read, days read, and time left at the reader's own pace once there are 10 minutes and
+  2 % of the book of data.
+- **Library:** a Continue reading row (books on the Reading shelf, most recent first) and filter
+  chips for shelves and collections, persisted with the other library preferences.
+
 ### Chapter isolation
 
 Chapters render in same-origin `srcdoc` iframes (so the engine can measure and annotate them) with
@@ -282,6 +302,7 @@ languages, and end-to-end runs in Chromium (mocked IPC) and in the real app on W
 | 5 | justBrowse (privacy-hardened browser) | ✅ done on desktop (mobile design in adr/0008) |
 | 6 | Android and iOS | ✅ Android done; iOS builds in CI (device install pending) |
 | 7 | Highlight export (Markdown, to any app) | ✅ done |
+| 8 | Reading stats, shelves, collections, Continue reading | ✅ done |
 
 ### Known limitations / follow-ups
 

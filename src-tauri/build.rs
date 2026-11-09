@@ -31,6 +31,16 @@ const COMMANDS: &[&str] = &[
     "export_annotations",
     "share_annotations",
     "save_annotations",
+    // Phase 8: shelves, collections, reading time and stats
+    "set_book_status",
+    "list_collections",
+    "create_collection",
+    "rename_collection",
+    "delete_collection",
+    "set_in_collection",
+    "record_reading",
+    "reading_stats",
+    "book_stats",
     // justBrowse (granted to the toolbar webview only, except open_browser)
     "take_pending_open",
     "open_browser",

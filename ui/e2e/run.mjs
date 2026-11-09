@@ -461,6 +461,77 @@ try {
     if (fmt === "AZW3") await page.screenshot({ path: join(shots, "11-azw3.png") });
   }
 
+  // ===== Phase 8: reading time, shelves, collections, stats =====
+  // STEP 30: reading time is recorded (the book closing flushes it).
+  await page.locator('button[title="Back to library (Esc)"]').click();
+  await page.waitForSelector(".card");
+  await page.locator(".card", { hasText: "The Lantern Harbor" }).click();
+  await page.waitForFunction(() => document.querySelector(".host iframe")?.contentDocument?.querySelector("[data-jrb]"));
+  for (let i = 0; i < 3; i++) {
+    await page.keyboard.press("ArrowRight");
+    await settle(800);
+  }
+  // The end of the book offers the Finished shelf.
+  await page.locator('button[title="Go to position"]').click();
+  await page.locator('input[aria-label="Position in book (preview)"]').evaluate((el) => { el.value = "1000"; el.dispatchEvent(new Event("input", { bubbles: true })); });
+  await page.locator(".sheet button", { hasText: "Go" }).click();
+  await settle();
+  await page.locator('button[title="Close position"]').click();
+  await page.locator('button[title="Go to position"]').click();
+  const fine2 = page.locator('input[aria-label="Position in chapter"]');
+  await fine2.evaluate((el) => { el.value = el.max; el.dispatchEvent(new Event("input", { bubbles: true })); el.dispatchEvent(new Event("change", { bubbles: true })); });
+  await settle();
+  await page.locator('button[title="Close position"]').click();
+  check((await page.locator(".end-prompt").count()) === 1, "the last page offers “Mark as finished”");
+  await page.screenshot({ path: join(shots, "12-end-prompt.png") });
+  await page.locator(".end-prompt button", { hasText: "Not now" }).click();
+  await page.locator('button[title="Back to library (Esc)"]').click();
+  await page.waitForSelector(".card");
+  const recorded = await page.evaluate(() => window.__jr.reading.filter((r) => r.seconds > 0).length);
+  check(recorded > 0, "active reading time is recorded when the book closes", `reports=${recorded}`);
+
+  // STEP 31: Continue reading row and shelf chips.
+  const cont = await page.locator(".continue .cont").allInnerTexts();
+  check(cont.length >= 1 && /Lantern Harbor/.test(cont[0]), "Continue reading shows the most recent book first", cont.join(" | "));
+  await page.locator(".chips button", { hasText: "Unread" }).click();
+  await settle(300);
+  const unreadTitles = await page.locator(".grid .card .title").allInnerTexts();
+  // Every book was opened earlier in this run, so the shelf is empty and says so.
+  const emptyMsg = await page.locator(".empty", { hasText: "No books on this shelf" }).count();
+  check(!unreadTitles.some((t) => /Lantern Harbor/.test(t)) && (unreadTitles.length > 0 || emptyMsg === 1), "Unread shelf leaves out opened books", `${unreadTitles.length} books, empty message ${emptyMsg}`);
+  await page.locator(".chips button", { hasText: "All" }).click();
+
+  // STEP 32: book options — shelf and a new collection.
+  const lanternCard = page.locator(".grid li", { has: page.locator(".card", { hasText: "The Lantern Harbor" }) }).first();
+  await lanternCard.locator('button[title="Book options"]').click();
+  await page.locator('.sheet[aria-label^="Book options"] button[role="radio"]', { hasText: "Finished" }).click();
+  await page.locator('input[aria-label="New collection name"]').fill("Book club");
+  await page.locator('.sheet[aria-label^="Book options"] button', { hasText: "Add" }).click();
+  await settle(400);
+  await page.screenshot({ path: join(shots, "13-book-options.png") });
+  const sheetTime = await page.locator('.sheet[aria-label^="Book options"] .stats').innerText().catch(() => "");
+  check(/Time read/.test(sheetTime), "book options show this book's reading time", sheetTime.replace(/\n/g, " "));
+  await page.locator('.sheet[aria-label^="Book options"] button[title="Close"]').click();
+  await page.locator(".chips button", { hasText: "Finished" }).click();
+  await settle(300);
+  const finished = await page.locator(".grid .card .title").allInnerTexts();
+  check(finished.length === 1 && /Lantern Harbor/.test(finished[0]), "Finished shelf shows the book marked finished", finished.join(","));
+  await page.locator(".chips button.coll", { hasText: "Book club" }).click();
+  await settle(300);
+  check((await page.locator(".grid .card").count()) === 1, "collection chip filters to its books");
+  await page.screenshot({ path: join(shots, "14-library-shelves.png") });
+  await page.locator(".chips button", { hasText: "All" }).click();
+
+  // STEP 33: the stats screen.
+  await page.locator('button[title="Reading stats"]').click();
+  await page.waitForSelector(".tiles");
+  const tiles = await page.locator(".tile").allInnerTexts();
+  const bars = await page.locator(".chart svg path.mark").count();
+  check(tiles.length === 4 && /Finished this year/.test(tiles.join(" ")) && bars >= 1, "stats show tiles and a reading-time chart", `${tiles.join(" | ").replace(/\n/g, " ")} bars=${bars}`);
+  await page.screenshot({ path: join(shots, "15-stats.png") });
+  await page.locator('button[title="Back to library"]').click();
+  await page.waitForSelector(".card");
+
   check(errors.length === 0, "no page errors", errors.slice(0, 3).join(" | "));
 } catch (e) {
   failures++;

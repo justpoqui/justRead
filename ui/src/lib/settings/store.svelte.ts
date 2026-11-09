@@ -35,9 +35,13 @@ export interface LibraryPrefs {
   view: "grid" | "list";
   sort: "title" | "author" | "series" | "recent" | "progress" | "added";
   descending: boolean;
+  /** Shelf filter (Phase 8). */
+  shelf: "all" | "unread" | "reading" | "finished";
+  /** Collection filter (collection id), or null for none. */
+  collection: string | null;
 }
 
-export const libraryPrefs: LibraryPrefs = $state({ view: "grid", sort: "recent", descending: true });
+export const libraryPrefs: LibraryPrefs = $state({ view: "grid", sort: "recent", descending: true, shelf: "all", collection: null });
 
 /** Load persisted settings once at startup. */
 export async function loadSettings(): Promise<void> {

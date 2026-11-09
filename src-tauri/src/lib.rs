@@ -11,6 +11,7 @@ mod export;
 mod open_files;
 mod protocol;
 mod state;
+mod stats;
 
 use tauri::Manager;
 
@@ -58,6 +59,15 @@ pub fn run() {
             export::export_annotations,
             export::share_annotations,
             export::save_annotations,
+            stats::set_book_status,
+            stats::list_collections,
+            stats::create_collection,
+            stats::rename_collection,
+            stats::delete_collection,
+            stats::set_in_collection,
+            stats::record_reading,
+            stats::reading_stats,
+            stats::book_stats,
             browse::open_browser,
             browse::browse_navigate,
             browse::browse_history,

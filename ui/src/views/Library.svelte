@@ -7,21 +7,34 @@
   import { listen } from "@tauri-apps/api/event";
   import Icon from "../components/Icon.svelte";
   import BookCover from "../components/BookCover.svelte";
+  import BookSheet from "../components/BookSheet.svelte";
   import { api } from "../lib/ipc/api";
-  import type { BookSummary, ImportResult, SortKey } from "../lib/ipc/types";
+  import type { BookSummary, Collection, ImportResult, SortKey } from "../lib/ipc/types";
   import { libraryPrefs, saveLibraryPrefs } from "../lib/settings/store.svelte";
   import { onBack } from "../lib/back";
   import { toast } from "../lib/stores/toasts.svelte";
   import { packageUrl } from "../lib/ipc/api";
   import { isMobile } from "../lib/platform";
 
-  let { onopen }: { onopen: (id: string) => void } = $props();
+  let { onopen, onstats }: { onopen: (id: string) => void; onstats: () => void } = $props();
 
   let books: BookSummary[] = $state([]);
   let search = $state("");
   let importing = $state(false);
   let dragging = $state(false);
   let loaded = $state(false);
+  // Phase 8: collections, the "Continue reading" row and the book options sheet.
+  let collections: Collection[] = $state([]);
+  let continueReading: BookSummary[] = $state([]);
+  let sheetFor = $state<string | null>(null);
+  const sheetBook = $derived(books.find((b) => b.id === sheetFor) ?? continueReading.find((b) => b.id === sheetFor) ?? null);
+  const SHELF_CHIPS = [
+    { id: "all", label: "All" },
+    { id: "reading", label: "Reading" },
+    { id: "unread", label: "Unread" },
+    { id: "finished", label: "Finished" },
+  ] as const;
+  const filtered = $derived(libraryPrefs.shelf !== "all" || libraryPrefs.collection !== null);
   // Android back: clear an active search first; otherwise let the app close.
   onMount(() => onBack(() => (search ? ((search = ""), true) : false)));
 
@@ -54,7 +67,19 @@
   // STEP 1: (re)load whenever search or sorting changes.
   async function refresh() {
     try {
-      books = await api.listBooks({ search: search || null, sort: libraryPrefs.sort, descending: libraryPrefs.descending });
+      // A deleted collection can't stay selected.
+      collections = await api.listCollections();
+      if (libraryPrefs.collection && !collections.some((c) => c.id === libraryPrefs.collection)) libraryPrefs.collection = null;
+      books = await api.listBooks({
+        search: search || null,
+        sort: libraryPrefs.sort,
+        descending: libraryPrefs.descending,
+        status: libraryPrefs.shelf === "all" ? null : libraryPrefs.shelf,
+        collection: libraryPrefs.collection,
+      });
+      continueReading = (await api.listBooks({ status: "reading", sort: "recent", descending: true }))
+        .filter((b) => b.lastOpenedAt !== null)
+        .slice(0, 12);
       void ensurePdfCovers(books);
     } catch (e) {
       toast(String(e), "error");
@@ -66,6 +91,8 @@
     void search;
     void libraryPrefs.sort;
     void libraryPrefs.descending;
+    void libraryPrefs.shelf;
+    void libraryPrefs.collection;
     void refresh();
   });
 
@@ -115,6 +142,7 @@
     if (!confirm(`Remove “${book.title}” and its highlights from this device?`)) return;
     try {
       await api.deleteBook(book.id);
+      sheetFor = null;
       await refresh();
     } catch (e) {
       toast(String(e), "error");
@@ -160,6 +188,47 @@
     saveLibraryPrefs();
   }
 
+  function setShelf(id: LibraryShelf) {
+    libraryPrefs.shelf = id;
+    libraryPrefs.collection = null;
+    saveLibraryPrefs();
+  }
+  function setCollection(id: string) {
+    libraryPrefs.collection = libraryPrefs.collection === id ? null : id;
+    libraryPrefs.shelf = "all";
+    saveLibraryPrefs();
+  }
+  async function newCollection() {
+    const name = prompt("Name of the new collection");
+    if (!name?.trim()) return;
+    try {
+      const c = await api.createCollection(name);
+      libraryPrefs.collection = c.id;
+      libraryPrefs.shelf = "all";
+      saveLibraryPrefs();
+    } catch (e) {
+      toast(String(e), "error");
+    }
+  }
+  async function renameCollection(c: Collection) {
+    const name = prompt("Rename collection", c.name);
+    if (!name?.trim() || name.trim() === c.name) return;
+    try {
+      await api.renameCollection(c.id, name);
+      await refresh();
+    } catch (e) {
+      toast(String(e), "error");
+    }
+  }
+  async function deleteCollection(c: Collection) {
+    if (!confirm(`Delete the collection “${c.name}”? Its books stay in your library.`)) return;
+    await api.deleteCollection(c.id).catch((e) => toast(String(e), "error"));
+    libraryPrefs.collection = null;
+    saveLibraryPrefs();
+  }
+  type LibraryShelf = (typeof SHELF_CHIPS)[number]["id"];
+  const activeCollection = $derived(collections.find((c) => c.id === libraryPrefs.collection) ?? null);
+
   function pct(b: BookSummary) {
     return Math.round(b.progression * 100);
   }
@@ -192,6 +261,7 @@
       >
         <Icon name={libraryPrefs.view === "grid" ? "list" : "grid"} />
       </button>
+      <button class="icon-btn" title="Reading stats" onclick={onstats}><Icon name="chart" /></button>
       {#if !isMobile}
         <button class="btn" title="Find free books online (justBrowse)" onclick={() => api.openBrowser().catch((e) => toast(String(e), "error"))}>
           <Icon name="globe" size={16} /> Find books
@@ -205,7 +275,53 @@
   </header>
 
   <main>
-    {#if loaded && books.length === 0}
+    {#if !search && !filtered && continueReading.length}
+      <section class="continue" aria-label="Continue reading">
+        <h2>Continue reading</h2>
+        <ul>
+          {#each continueReading as b (b.id)}
+            <li>
+              <button class="cont" onclick={() => onopen(b.id)} title="Continue “{b.title}”">
+                <BookCover book={b} />
+                <span class="title">{b.title}</span>
+                <span class="bar" aria-label="{pct(b)}% read"><span style="width:{pct(b)}%"></span></span>
+              </button>
+            </li>
+          {/each}
+        </ul>
+      </section>
+    {/if}
+
+    {#if loaded}
+      <nav class="chips" aria-label="Shelves and collections">
+        {#each SHELF_CHIPS as s (s.id)}
+          <button class:on={libraryPrefs.shelf === s.id && !libraryPrefs.collection} aria-pressed={libraryPrefs.shelf === s.id && !libraryPrefs.collection} onclick={() => setShelf(s.id)}>{s.label}</button>
+        {/each}
+        {#if collections.length}<span class="sep" aria-hidden="true"></span>{/if}
+        {#each collections as c (c.id)}
+          <button class="coll" class:on={libraryPrefs.collection === c.id} aria-pressed={libraryPrefs.collection === c.id} onclick={() => setCollection(c.id)}>{c.name} <span class="n">{c.count}</span></button>
+        {/each}
+        <button class="add" title="New collection" onclick={newCollection}><Icon name="plus" size={14} /> Collection</button>
+        {#if activeCollection}
+          <span class="coll-tools">
+            <button class="icon-btn" title="Rename collection" onclick={() => renameCollection(activeCollection)}><Icon name="note" size={15} /></button>
+            <button class="icon-btn" title="Delete collection" onclick={() => deleteCollection(activeCollection)}><Icon name="trash" size={15} /></button>
+          </span>
+        {/if}
+      </nav>
+    {/if}
+
+    {#if loaded && books.length === 0 && (search || filtered)}
+      <div class="empty">
+        {#if search}
+          <p>No books match “{search}”.</p>
+        {:else if activeCollection}
+          <p>“{activeCollection.name}” is empty. Add books with the ⋯ button on a book.</p>
+        {:else}
+          <p>No books on this shelf yet.</p>
+        {/if}
+      </div>
+    {:else if loaded && books.length === 0}
       <div class="empty">
         {#if search}
           <p>No books match “{search}”.</p>
@@ -228,7 +344,7 @@
                 <span class="bar" aria-label="{pct(b)}% read"><span style="width:{pct(b)}%"></span></span>
               {/if}
             </button>
-            <button class="del icon-btn" title="Remove from library" onclick={() => remove(b)}><Icon name="trash" size={16} /></button>
+            <button class="del icon-btn" title="Book options" onclick={() => (sheetFor = b.id)}><Icon name="more" size={18} /></button>
           </li>
         {/each}
       </ul>
@@ -243,13 +359,18 @@
               <td>{b.authors.join(", ")}</td>
               <td>{b.series ? `${b.series}${b.seriesIndex != null ? ` #${b.seriesIndex}` : ""}` : ""}</td>
               <td>{pct(b)}%</td>
-              <td><button class="icon-btn" title="Remove from library" onclick={() => remove(b)}><Icon name="trash" size={16} /></button></td>
+              <td><button class="icon-btn" title="Book options" onclick={() => (sheetFor = b.id)}><Icon name="more" size={18} /></button></td>
             </tr>
           {/each}
         </tbody>
       </table>
     {/if}
   </main>
+
+  {#if sheetBook}
+    {@const b = sheetBook}
+    <BookSheet book={b} {collections} onchange={() => void refresh()} onremove={() => remove(b)} onclose={() => (sheetFor = null)} />
+  {/if}
 
   {#if dragging}
     <div class="drop">Drop books to import</div>
@@ -370,6 +491,83 @@
   .grid li:hover .del,
   .del:focus-visible {
     opacity: 1;
+  }
+  /* Phase 8: Continue reading row and shelf/collection chips. */
+  .continue h2 {
+    font-size: 14px;
+    margin: 0 0 10px;
+  }
+  .continue ul {
+    list-style: none;
+    margin: 0 0 18px;
+    padding: 0 0 6px;
+    display: flex;
+    gap: 16px;
+    overflow-x: auto;
+    scroll-snap-type: x proximity;
+  }
+  .continue li {
+    flex: none;
+    width: 110px;
+    scroll-snap-align: start;
+  }
+  .cont {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    border: 0;
+    background: none;
+    padding: 0;
+    text-align: left;
+    cursor: pointer;
+  }
+  .cont .title {
+    font-size: 12.5px;
+  }
+  .chips {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    overflow-x: auto;
+    margin: 0 0 18px;
+    padding-bottom: 4px;
+  }
+  .chips > button {
+    flex: none;
+    border: 1px solid var(--border);
+    background: none;
+    border-radius: 999px;
+    padding: 5px 12px;
+    cursor: pointer;
+    white-space: nowrap;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .chips > button.on {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+  }
+  .chips .n {
+    opacity: 0.7;
+    font-size: 12px;
+  }
+  .chips .add {
+    color: var(--muted);
+    border-style: dashed;
+  }
+  .chips .sep {
+    flex: none;
+    width: 1px;
+    height: 20px;
+    background: var(--border);
+    margin: 0 4px;
+  }
+  .coll-tools {
+    display: flex;
+    flex: none;
   }
   .list {
     width: 100%;

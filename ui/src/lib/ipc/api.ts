@@ -14,6 +14,10 @@ import type {
   NewAnnotation,
   OpenedBook,
   ExportedAnnotations,
+  BookStatus,
+  Collection,
+  ReadingStats,
+  BookStats,
 } from "./types";
 
 export const api = {
@@ -37,6 +41,18 @@ export const api = {
   exportAnnotations: (bookId: string) => invoke<ExportedAnnotations>("export_annotations", { bookId }),
   shareAnnotations: (bookId: string) => invoke<void>("share_annotations", { bookId }),
   saveAnnotations: (bookId: string) => invoke<string | null>("save_annotations", { bookId }),
+  // Phase 8: shelves, collections, reading time and stats.
+  setBookStatus: (bookId: string, status: BookStatus) => invoke<void>("set_book_status", { bookId, status }),
+  listCollections: () => invoke<Collection[]>("list_collections"),
+  createCollection: (name: string) => invoke<Collection>("create_collection", { name }),
+  renameCollection: (id: string, name: string) => invoke<void>("rename_collection", { id, name }),
+  deleteCollection: (id: string) => invoke<void>("delete_collection", { id }),
+  setInCollection: (bookId: string, collectionId: string, member: boolean) =>
+    invoke<void>("set_in_collection", { bookId, collectionId, member }),
+  recordReading: (bookId: string, day: string, seconds: number, progress: number) =>
+    invoke<void>("record_reading", { bookId, day, seconds, progress }),
+  readingStats: (today: string, days: number) => invoke<ReadingStats>("reading_stats", { today, days }),
+  bookStats: (bookId: string) => invoke<BookStats>("book_stats", { bookId }),
   openBrowser: () => invoke<void>("open_browser"),
   takePendingOpen: () => invoke<string[]>("take_pending_open"),
   // Bytes travel as a number array; covers are small (~30 KB JPEG).

@@ -79,6 +79,34 @@ const MIGRATIONS: &[&str] = &[
     );
     CREATE INDEX annotations_book ON annotations(book_id, sort_spine, sort_block, sort_offset);
     "#,
+    // v3 — Phase 8: shelves (status), collections and reading time.
+    r#"
+    ALTER TABLE books ADD COLUMN status TEXT NOT NULL DEFAULT 'unread'
+        CHECK (status IN ('unread', 'reading', 'finished'));
+    ALTER TABLE books ADD COLUMN finished_at INTEGER;     -- unix ms, set when marked finished
+    UPDATE books SET status = 'reading' WHERE last_opened_at IS NOT NULL;
+
+    CREATE TABLE collections (
+        id         TEXT PRIMARY KEY,
+        name       TEXT NOT NULL UNIQUE COLLATE NOCASE,
+        created_at INTEGER NOT NULL
+    );
+    CREATE TABLE book_collections (
+        book_id       TEXT NOT NULL REFERENCES books(id) ON DELETE CASCADE,
+        collection_id TEXT NOT NULL REFERENCES collections(id) ON DELETE CASCADE,
+        PRIMARY KEY (book_id, collection_id)
+    );
+
+    -- Reading time per book per (local) day; only active reading is counted.
+    CREATE TABLE reading_days (
+        book_id  TEXT NOT NULL REFERENCES books(id) ON DELETE CASCADE,
+        day      TEXT NOT NULL,                       -- YYYY-MM-DD, the reader's local date
+        seconds  INTEGER NOT NULL DEFAULT 0,
+        progress REAL NOT NULL DEFAULT 0,             -- share of the book read forward (0..1)
+        PRIMARY KEY (book_id, day)
+    );
+    CREATE INDEX reading_days_day ON reading_days(day);
+    "#,
 ];
 
 /// Connection-level settings applied on every open.

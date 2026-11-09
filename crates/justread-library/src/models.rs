@@ -23,12 +23,46 @@ pub struct BookSummary {
     pub last_opened_at: Option<i64>,
     /// 0.0 ..= 1.0; 0 if never opened.
     pub progression: f64,
+    pub status: BookStatus,
+    pub finished_at: Option<i64>,
+    /// Ids of the collections this book is in.
+    pub collections: Vec<String>,
+}
+
+/// Shelf a book is on.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum BookStatus {
+    #[default]
+    Unread,
+    Reading,
+    Finished,
+}
+
+impl BookStatus {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Unread => "unread",
+            Self::Reading => "reading",
+            Self::Finished => "finished",
+        }
+    }
+
+    pub fn parse(s: &str) -> Self {
+        match s {
+            "reading" => Self::Reading,
+            "finished" => Self::Finished,
+            _ => Self::Unread,
+        }
+    }
 }
 
 /// Columns read by [`summary_from_row`] (keep the two in sync).
 pub(crate) const SUMMARY_COLUMNS: &str =
     "b.id, b.title, b.authors, b.series, b.series_index, b.language, \
-     b.format, b.cover, b.added_at, b.last_opened_at, COALESCE(p.progression, 0)";
+     b.format, b.cover, b.added_at, b.last_opened_at, COALESCE(p.progression, 0), \
+     b.status, b.finished_at, \
+     (SELECT group_concat(bc.collection_id, ',') FROM book_collections bc WHERE bc.book_id = b.id)";
 
 pub(crate) fn summary_from_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<BookSummary> {
     let authors: String = r.get(2)?;
@@ -48,6 +82,12 @@ pub(crate) fn summary_from_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<BookSu
         added_at: r.get(8)?,
         last_opened_at: r.get(9)?,
         progression: r.get(10)?,
+        status: BookStatus::parse(&r.get::<_, String>(11)?),
+        finished_at: r.get(12)?,
+        collections: r
+            .get::<_, Option<String>>(13)?
+            .map(|s| s.split(',').map(str::to_string).collect())
+            .unwrap_or_default(),
     })
 }
 
@@ -74,6 +114,12 @@ pub struct BookQuery {
     pub sort: SortKey,
     #[serde(default)]
     pub descending: bool,
+    /// Only books on this shelf.
+    #[serde(default)]
+    pub status: Option<BookStatus>,
+    /// Only books in this collection.
+    #[serde(default)]
+    pub collection: Option<String>,
 }
 
 /// Saved reading position.

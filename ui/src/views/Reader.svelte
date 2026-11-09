@@ -22,6 +22,7 @@
   import { settings, saveSettings, setLayout, currentLayout, LAYOUTS } from "../lib/settings/store.svelte";
   import { toast } from "../lib/stores/toasts.svelte";
   import { onBack } from "../lib/back";
+  import { ReadingTracker } from "../lib/stats/tracker";
 
   let { id, onclose }: { id: string; onclose: () => void } = $props();
 
@@ -36,6 +37,8 @@
   let panel = $state<"toc" | "notes" | "settings" | "position" | null>(null);
   /** The full Settings screen (⚙). */
   let settingsOpen = $state(false);
+  /** End of the book reached: offer to move it to the Finished shelf (once per visit). */
+  let endPrompt = $state<"show" | "done" | null>(null);
   /** Where the reader was before a jump from the Position popup ("Back to where you were"). */
   let returnTo = $state<string | null>(null);
   let chrome = $state(true);
@@ -70,6 +73,30 @@
     return true;
   }
   onMount(() => onBack(back));
+
+  // Reading time (Phase 8): only active reading counts, reported about once a minute.
+  const tracker = new ReadingTracker((r) => void api.recordReading(id, r.day, r.seconds, r.progress).catch(() => {}));
+  onMount(() => {
+    const timer = setInterval(() => tracker.tick(), 5000);
+    const vis = () => tracker.setVisible(document.visibilityState === "visible");
+    document.addEventListener("visibilitychange", vis);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", vis);
+      tracker.flush();
+    };
+  });
+
+  async function markFinished() {
+    endPrompt = "done";
+    try {
+      await api.setBookStatus(id, "finished");
+      if (book) book.book.status = "finished";
+      toast("Moved to Finished");
+    } catch (e) {
+      toast(String(e), "error");
+    }
+  }
 
   // STEP 1: open the book, then create the engine at the saved position.
   onMount(() => {
@@ -107,11 +134,17 @@
         // STEP 2: wire engine events to UI state.
         engine.on("relocate", (e) => {
           where = e;
+          tracker.moved(e.progression);
+          // The last page of the book: offer the Finished shelf.
+          const m = book?.manifest;
+          const atEnd = e.progression >= 0.995 || (!!m && m.layout !== "fixed" && e.spine === m.spine.length - 1 && e.pages > 0 && e.page === e.pages);
+          if (atEnd && endPrompt === null && book?.book.status !== "finished") endPrompt = "show";
           clearTimeout(saveTimer);
           // Debounced: saving on every page turn would be wasteful.
           saveTimer = setTimeout(() => void api.saveProgress(id, formatLocator(e.anchor), e.progression), 600);
         });
         engine.on("selection", (s) => {
+          tracker.active();
           selection = s;
           active = null;
         });
@@ -453,6 +486,14 @@
     <button class="icon-btn hide-btn" title="Hide controls" onclick={() => ((layoutMenu = false), (panel = null), (chrome = false))}><Icon name="down" /></button>
   </footer>
 
+  {#if endPrompt === "show"}
+    <div class="end-prompt" role="status">
+      <span>You’ve reached the end of the book.</span>
+      <button class="primary" onclick={markFinished}>Mark as finished</button>
+      <button onclick={() => (endPrompt = "done")}>Not now</button>
+    </div>
+  {/if}
+
   {#if !chrome && !panel && !settingsOpen}
     <button class="show-handle" title="Show controls" onclick={() => (chrome = true)}><Icon name="up" size={18} /></button>
   {/if}
@@ -504,6 +545,37 @@
   .hide-chrome .pos {
     opacity: 0.55;
     pointer-events: none;
+  }
+  .end-prompt {
+    position: absolute;
+    left: 50%;
+    bottom: 64px;
+    transform: translateX(-50%);
+    z-index: 22;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
+    width: max-content;
+    max-width: calc(100% - 24px);
+    padding: 10px 14px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.18);
+  }
+  .end-prompt button {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: none;
+    padding: 5px 12px;
+    cursor: pointer;
+  }
+  .end-prompt .primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
   }
   .show-handle {
     position: absolute;

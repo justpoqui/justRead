@@ -3,13 +3,14 @@
   import { onMount } from "svelte";
   import Library from "./views/Library.svelte";
   import Reader from "./views/Reader.svelte";
+  import Stats from "./views/Stats.svelte";
   import Toasts from "./components/Toasts.svelte";
   import { settings, loadSettings } from "./lib/settings/store.svelte";
   import { themeColors } from "./lib/settings/reader-settings";
   import { installBackButton } from "./lib/back";
 
   // STEP 1: a two-screen app — the library and the reader.
-  type Route = { name: "library" } | { name: "reader"; id: string };
+  type Route = { name: "library" } | { name: "reader"; id: string } | { name: "stats" };
   let route: Route = $state({ name: "library" });
   let ready = $state(false);
 
@@ -35,7 +36,9 @@
 
 {#if ready}
   {#if route.name === "library"}
-    <Library onopen={(id) => (route = { name: "reader", id })} />
+    <Library onopen={(id) => (route = { name: "reader", id })} onstats={() => (route = { name: "stats" })} />
+  {:else if route.name === "stats"}
+    <Stats onclose={() => (route = { name: "library" })} />
   {:else}
     {#key route.id}
       <Reader id={route.id} onclose={() => (route = { name: "library" })} />

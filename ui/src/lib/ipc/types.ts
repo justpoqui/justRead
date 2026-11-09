@@ -63,6 +63,44 @@ export interface BookSummary {
   addedAt: number;
   lastOpenedAt: number | null;
   progression: number;
+  status: BookStatus;
+  finishedAt: number | null;
+  /** Ids of the collections the book is in. */
+  collections: string[];
+}
+
+/** Library shelves (Phase 8). */
+export type BookStatus = "unread" | "reading" | "finished";
+
+export interface Collection {
+  id: string;
+  name: string;
+  count: number;
+}
+
+export interface DayTotal {
+  day: string;
+  seconds: number;
+}
+
+export interface ReadingStats {
+  todaySeconds: number;
+  weekSeconds: number;
+  totalSeconds: number;
+  streakDays: number;
+  finishedThisYear: number;
+  booksFinished: number;
+  booksReading: number;
+  daily: DayTotal[];
+}
+
+export interface BookStats {
+  seconds: number;
+  daysRead: number;
+  firstDay: string | null;
+  lastDay: string | null;
+  progressRead: number;
+  secondsLeft: number | null;
 }
 
 export type SortKey = "title" | "author" | "series" | "recent" | "progress" | "added";
@@ -71,6 +109,8 @@ export interface BookQuery {
   search?: string | null;
   sort: SortKey;
   descending: boolean;
+  status?: BookStatus | null;
+  collection?: string | null;
 }
 
 export interface Progress {
