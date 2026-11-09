@@ -10,6 +10,7 @@
   import { api } from "../lib/ipc/api";
   import type { BookSummary, ImportResult, SortKey } from "../lib/ipc/types";
   import { libraryPrefs, saveLibraryPrefs } from "../lib/settings/store.svelte";
+  import { onBack } from "../lib/back";
   import { toast } from "../lib/stores/toasts.svelte";
   import { packageUrl } from "../lib/ipc/api";
   import { isMobile } from "../lib/platform";
@@ -21,6 +22,8 @@
   let importing = $state(false);
   let dragging = $state(false);
   let loaded = $state(false);
+  // Android back: clear an active search first; otherwise let the app close.
+  onMount(() => onBack(() => (search ? ((search = ""), true) : false)));
 
   const SORTS: { key: SortKey; label: string }[] = [
     { key: "recent", label: "Recently read" },

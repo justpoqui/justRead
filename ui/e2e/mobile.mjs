@@ -169,6 +169,31 @@ try {
   await page.screenshot({ path: join(shots, "m4-settings-sheet.png") });
   await page.locator('button[title="Reading settings"]').click();
 
+  // STEP 6b: the Settings screen stays below the status bar (simulated 40px safe area).
+  await page.evaluate(() => (document.getElementById("app").style.paddingTop = "40px"));
+  await page.locator('button[title="Settings"]').click();
+  const scr = await page.locator(".screen").boundingBox();
+  check(scr && scr.y >= 39.5, "Settings screen is not covered by the status bar", JSON.stringify(scr));
+  await page.screenshot({ path: join(shots, "m4b-settings-screen.png") });
+
+  // STEP 6c: Android back closes the topmost layer, then the book — never the app first.
+  const back = () => page.evaluate(() => window.__justreadBack());
+  await back();
+  await settle(300);
+  check((await page.locator(".screen").count()) === 0 && (await page.locator(".host").count()) === 1, "back closes the Settings screen, book stays open");
+  await page.locator('button[title="Contents"]').click();
+  await back();
+  await settle(300);
+  check((await page.locator(".side").count()) === 0 && (await page.locator(".host").count()) === 1, "back closes a panel, book stays open");
+  await back();
+  await page.waitForSelector(".card");
+  check((await page.locator(".card").count()) > 0, "back with nothing open returns to the library");
+  check((await back()) === false, "back in the library lets the app close");
+  await page.evaluate(() => (document.getElementById("app").style.paddingTop = ""));
+  await page.locator(".card", { hasText: "The Lantern Harbor" }).click();
+  await page.waitForFunction(() => document.querySelector(".host iframe")?.contentDocument?.querySelector("[data-jrb]"));
+  await settle();
+
   // STEP 7: comic — swipe and pinch-zoom.
   await page.locator('button[title="Back to library (Esc)"]').click();
   await page.locator(".card", { hasText: "Harbor Lights" }).click();

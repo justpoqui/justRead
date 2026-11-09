@@ -21,6 +21,7 @@
   import type { TocEntry } from "../lib/ipc/types";
   import { settings, saveSettings, setLayout, currentLayout, LAYOUTS } from "../lib/settings/store.svelte";
   import { toast } from "../lib/stores/toasts.svelte";
+  import { onBack } from "../lib/back";
 
   let { id, onclose }: { id: string; onclose: () => void } = $props();
 
@@ -53,6 +54,22 @@
   const pageBookmarks = $derived(
     fixed ? bookmarksOnPages(annotations, where?.visiblePages ?? null) : bookmarksInRange(annotations, where?.range ?? null),
   );
+
+  // Esc and the Android back button close the topmost thing that is open;
+  // with nothing open they leave the book. Always consumes the press.
+  function back(): boolean {
+    if (editing) editing = null;
+    else if (settingsOpen) settingsOpen = false;
+    else if (layoutMenu) layoutMenu = false;
+    else if (selection || active) {
+      selection = null;
+      active = null;
+      engine?.clearSelection();
+    } else if (panel) panel = null;
+    else onclose();
+    return true;
+  }
+  onMount(() => onBack(back));
 
   // STEP 1: open the book, then create the engine at the saved position.
   onMount(() => {
@@ -171,14 +188,7 @@
         void engine?.prev();
         break;
       case "Escape":
-        if (settingsOpen) settingsOpen = false;
-        else if (layoutMenu) layoutMenu = false;
-        else if (selection || active) {
-          selection = null;
-          active = null;
-          engine?.clearSelection();
-        } else if (panel) panel = null;
-        else onclose();
+        back();
         break;
       case "b":
         if (!e.ctrlKey && !e.metaKey) void toggleBookmark();
@@ -465,6 +475,9 @@
 
 <style>
   .reader {
+    /* Overlays (Settings screen, handle) are placed inside the reader, which sits
+       inside the safe-area padding, so phone status bars never cover them. */
+    position: relative;
     height: 100%;
     display: flex;
     flex-direction: column;

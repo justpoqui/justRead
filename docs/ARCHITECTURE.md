@@ -234,6 +234,10 @@ Progress saved to SQLite is the anchor.
   previews the target chapter until **Go**. Any jump from the popup offers "Back to where you were".
 - **Hiding controls:** a tap in the middle or the ⌄ button hides both bars; hidden controls ignore
   taps and clicks, the indicator stays faintly visible, and a small handle brings them back.
+- **Back (Esc / Android back button):** closes the topmost layer (note editor, Settings, layout
+  menu, selection, panel), then leaves the book. `lib/back.ts` keeps a stack of handlers and takes
+  over Android's back key with Tauri's `onBackButtonPress`; only in the library with nothing to clear
+  does the app exit (`core:app:allow-exit`).
 
 ### Chapter isolation
 

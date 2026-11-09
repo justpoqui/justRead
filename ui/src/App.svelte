@@ -6,6 +6,7 @@
   import Toasts from "./components/Toasts.svelte";
   import { settings, loadSettings } from "./lib/settings/store.svelte";
   import { themeColors } from "./lib/settings/reader-settings";
+  import { installBackButton } from "./lib/back";
 
   // STEP 1: a two-screen app — the library and the reader.
   type Route = { name: "library" } | { name: "reader"; id: string };
@@ -14,6 +15,7 @@
 
   onMount(async () => {
     await loadSettings();
+    void installBackButton();
     ready = true;
   });
 
