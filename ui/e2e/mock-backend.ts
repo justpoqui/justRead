@@ -78,6 +78,16 @@ export async function installBackend() {
         Object.assign(a, args.patch);
         return a;
       }
+      // Phase 7 export: a simplified document is enough for the UI flow.
+      case "export_annotations": {
+        const list = state.annotations.filter((a) => a.bookId === args.bookId);
+        const markdown = `# Highlights\n\n${list.map((a) => `> ${a.quote}${a.note ? `\n\n**Note:** ${a.note}` : ""}`).join("\n\n")}\n`;
+        return { title: "Book — highlights", fileName: "Book — highlights.md", markdown, nativeShare: /Android/i.test(navigator.userAgent) };
+      }
+      case "share_annotations":
+        return null;
+      case "save_annotations":
+        return "Book — highlights.md";
       case "take_pending_open":
         return [];
       case "set_cover":

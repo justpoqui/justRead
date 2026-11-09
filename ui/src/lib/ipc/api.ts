@@ -13,6 +13,7 @@ import type {
   ImportResult,
   NewAnnotation,
   OpenedBook,
+  ExportedAnnotations,
 } from "./types";
 
 export const api = {
@@ -32,6 +33,10 @@ export const api = {
   updateAnnotation: (id: string, patch: { note?: string; color?: string }) =>
     invoke<Annotation>("update_annotation", { id, patch }),
   deleteAnnotation: (id: string) => invoke<void>("delete_annotation", { id }),
+  // Phase 7: highlights as Markdown, for any app.
+  exportAnnotations: (bookId: string) => invoke<ExportedAnnotations>("export_annotations", { bookId }),
+  shareAnnotations: (bookId: string) => invoke<void>("share_annotations", { bookId }),
+  saveAnnotations: (bookId: string) => invoke<string | null>("save_annotations", { bookId }),
   openBrowser: () => invoke<void>("open_browser"),
   takePendingOpen: () => invoke<string[]>("take_pending_open"),
   // Bytes travel as a number array; covers are small (~30 KB JPEG).

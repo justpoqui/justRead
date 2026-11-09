@@ -239,6 +239,25 @@ Progress saved to SQLite is the anchor.
   over Android's back key with Tauri's `onBackButtonPress`; only in the library with nothing to clear
   does the app exit (`core:app:allow-exit`).
 
+### Highlight export (Phase 7)
+
+A book's highlights, notes and bookmarks become one plain Markdown document
+(`justread-library/src/export.rs`, unit-tested): YAML front matter (title, author, date), a
+heading per chapter, each highlight as a block quote (book text escaped so it shows literally;
+colors other than yellow named in words), the reader's notes as written, then a bookmarks list.
+No app-specific syntax: any Markdown or text app can read it. justRead does not write into other
+apps' folders.
+
+The **Export** row in the Highlights panel sends it anywhere:
+- **Share…**: Android uses our own plugin `crates/tauri-plugin-justshare` (Kotlin, ~60 lines):
+  the file goes to a private cache folder, is exposed read-only through the plugin's own
+  `FileProvider`, and `ACTION_SEND` carries both the `.md` file and the text, so the system share
+  sheet lists every app that takes either. iOS, Windows and macOS use the web Share API
+  (`navigator.share` with the file). Linux has no share sheet, so the button is hidden there.
+- **Save…**: the OS Save dialog is opened from Rust (`save_annotations`), so the webview never
+  supplies a path; Android/iOS document URLs are written through the fs plugin.
+- **Copy**: the text on the clipboard.
+
 ### Chapter isolation
 
 Chapters render in same-origin `srcdoc` iframes (so the engine can measure and annotate them) with
@@ -261,8 +280,8 @@ languages, and end-to-end runs in Chromium (mocked IPC) and in the real app on W
 | 3 | PDF (PDF.js) and comics (CBZ/CB7; CBR pending license decision) | ✅ done |
 | 4 | MOBI, AZW3, FB2, HTML, DOCX adapters; DjVu | ✅ done, except DjVu (decision pending, adr/0007) |
 | 5 | justBrowse (privacy-hardened browser) | ✅ done on desktop (mobile design in adr/0008) |
-| 6 | Android and iOS | next |
-| 7 | Markdown highlight export / JustNotes | |
+| 6 | Android and iOS | ✅ Android done; iOS builds in CI (device install pending) |
+| 7 | Highlight export (Markdown, to any app) | ✅ done |
 
 ### Known limitations / follow-ups
 

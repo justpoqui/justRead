@@ -435,7 +435,7 @@
           {/if}
         {:else if panel === "notes"}
           <h2>Annotations</h2>
-          <AnnotationsPanel {annotations} onselect={jumpTo} onedit={editNote} ondelete={removeAnnotation} />
+          <AnnotationsPanel bookId={id} {annotations} onselect={jumpTo} onedit={editNote} ondelete={removeAnnotation} />
         {:else if panel === "settings"}
           <h2>Reading settings</h2>
           <SettingsPanel {fixed} />

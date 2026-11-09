@@ -10,6 +10,7 @@ Policy: MIT, BSD, Apache-2.0, ISC or zlib (see CONTRIBUTING.md). Enforced by `ca
 | tauri, tauri-build | App shell | Apache-2.0 OR MIT |
 | tauri-plugin-dialog | Import file picker | Apache-2.0 OR MIT |
 | tauri-plugin-fs | Reading files handed over as URIs (Android/iOS), Rust side only | Apache-2.0 OR MIT |
+| tauri-plugin (build) | Build helper for our own share plugin (`crates/tauri-plugin-justshare`) | Apache-2.0 OR MIT |
 | rusqlite (`bundled`) | SQLite access | MIT (SQLite itself: public domain) |
 | zip | EPUB container | MIT |
 | quick-xml | OPF/NCX/nav/XHTML parsing | MIT |
@@ -67,6 +68,12 @@ used from the environment for end-to-end tests only.
 | Windows | Microsoft WebView2 | System runtime |
 | macOS / iOS | WKWebView | System framework |
 | Android | System WebView | System component |
+
+## Android libraries
+
+| Library | Used for | License |
+|---|---|---|
+| androidx.core (core-ktx) | `FileProvider` for sharing exports from our share plugin | Apache-2.0 |
 
 ## Data
 

@@ -27,6 +27,10 @@ const COMMANDS: &[&str] = &[
     "add_annotation",
     "update_annotation",
     "delete_annotation",
+    // Phase 7: highlight export (Markdown; share / save / copy)
+    "export_annotations",
+    "share_annotations",
+    "save_annotations",
     // justBrowse (granted to the toolbar webview only, except open_browser)
     "take_pending_open",
     "open_browser",

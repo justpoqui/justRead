@@ -7,6 +7,7 @@
 
 mod browse;
 mod commands;
+mod export;
 mod open_files;
 mod protocol;
 mod state;
@@ -22,6 +23,8 @@ pub fn run() {
         // any fs permission.
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
+        // Phase 7: native share sheet for exports (Android; no JS commands of its own).
+        .plugin(tauri_plugin_justshare::init())
         .manage(open_files::PendingOpen::default())
         .manage(browse::BrowseState::default())
         // STEP 2: serve book packages to the reader iframe.
@@ -52,6 +55,9 @@ pub fn run() {
             commands::add_annotation,
             commands::update_annotation,
             commands::delete_annotation,
+            export::export_annotations,
+            export::share_annotations,
+            export::save_annotations,
             browse::open_browser,
             browse::browse_navigate,
             browse::browse_history,

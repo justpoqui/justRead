@@ -280,6 +280,23 @@ try {
   check(bms.length === 1, "B adds a bookmark at the current page", bms[0]?.start);
   check(await page.locator('button[title="Bookmark this page (B)"].active').count() === 1, "bookmark button shows the page is bookmarked");
 
+  // STEP 11b: export highlights (Phase 7) — Copy and Save go through the backend's Markdown.
+  await page.evaluate(() => {
+    window.__copied = null;
+    Object.defineProperty(navigator, "clipboard", { value: { writeText: async (t) => (window.__copied = t) }, configurable: true });
+  });
+  await page.locator('button[title="Highlights & bookmarks"]').click();
+  await page.locator(".export button", { hasText: "Copy" }).click();
+  await settle(400);
+  const copied = await page.evaluate(() => window.__copied);
+  check(typeof copied === "string" && copied.includes(anns[0].quote.trim().slice(0, 20)), "Copy puts the highlights on the clipboard as Markdown", copied?.slice(0, 60));
+  await page.locator(".export button", { hasText: "Save" }).click();
+  await settle(400);
+  const saveCalls = await page.evaluate(() => window.__jr.calls.filter((c) => c.cmd === "save_annotations").length);
+  check(saveCalls === 1 && (await page.locator(".toast", { hasText: "Saved" }).count()) === 1, "Save asks the backend to write the file and confirms", `calls=${saveCalls}`);
+  await page.screenshot({ path: join(shots, "06b-export.png") });
+  await page.locator('button[title="Highlights & bookmarks"]').click();
+
   // STEP 12: TOC navigation and an internal link.
   await page.locator('button[title="Contents"]').click();
   await page.locator(".side button", { hasText: "Chapter 3" }).click();

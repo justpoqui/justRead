@@ -194,6 +194,23 @@ try {
   await page.waitForFunction(() => document.querySelector(".host iframe")?.contentDocument?.querySelector("[data-jrb]"));
   await settle();
 
+  // STEP 6d: Share sends the highlights to the native share sheet (Android).
+  await page.locator('button[title="Highlights & bookmarks"]').click();
+  const shareBtn = page.locator(".export button", { hasText: "Share" });
+  check((await shareBtn.count()) === 1, "Share button is offered on Android");
+  // Needs at least one annotation: add a bookmark first if there is none.
+  if (await shareBtn.isDisabled()) {
+    await page.locator('button[title="Highlights & bookmarks"]').click();
+    await page.locator('button[title="Bookmark this page (B)"]').click();
+    await settle(400);
+    await page.locator('button[title="Highlights & bookmarks"]').click();
+  }
+  await shareBtn.click();
+  await settle(400);
+  check(await page.evaluate(() => window.__jr.calls.some((c) => c.cmd === "share_annotations")), "Share uses the native share sheet");
+  await page.screenshot({ path: join(shots, "m4c-export.png") });
+  await page.locator('button[title="Highlights & bookmarks"]').click();
+
   // STEP 7: comic — swipe and pinch-zoom.
   await page.locator('button[title="Back to library (Esc)"]').click();
   await page.locator(".card", { hasText: "Harbor Lights" }).click();

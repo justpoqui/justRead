@@ -28,6 +28,9 @@
     "allow-add-annotation",
     "allow-update-annotation",
     "allow-delete-annotation",
+    "allow-export-annotations",
+    "allow-share-annotations",
+    "allow-save-annotations",
     "allow-open-browser",
     "allow-take-pending-open"
   ]

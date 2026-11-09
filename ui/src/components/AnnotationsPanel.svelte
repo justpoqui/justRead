@@ -1,15 +1,18 @@
 <!-- Copyright 2026 The justRead Authors. SPDX-License-Identifier: Apache-2.0 -->
 <script lang="ts">
   import Icon from "./Icon.svelte";
+  import ExportBar from "./ExportBar.svelte";
   import type { Annotation } from "../lib/ipc/types";
   import { HIGHLIGHT_COLORS } from "../lib/reader/styles";
 
   let {
+    bookId,
     annotations,
     onselect,
     onedit,
     ondelete,
   }: {
+    bookId: string;
     annotations: Annotation[];
     onselect: (a: Annotation) => void;
     onedit: (a: Annotation) => void;
@@ -19,6 +22,8 @@
   let tab: "highlights" | "bookmarks" = $state("highlights");
   const shown = $derived(annotations.filter((a) => (tab === "bookmarks" ? a.kind === "bookmark" : a.kind !== "bookmark")));
 </script>
+
+<ExportBar {bookId} count={annotations.length} />
 
 <div class="tabs" role="tablist">
   <button role="tab" aria-selected={tab === "highlights"} class:on={tab === "highlights"} onclick={() => (tab = "highlights")}>

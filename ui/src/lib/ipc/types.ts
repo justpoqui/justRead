@@ -122,3 +122,12 @@ export interface NewAnnotation {
   color?: string;
   chapter?: string | null;
 }
+
+/** A book's highlights, notes and bookmarks as Markdown (Phase 7). */
+export interface ExportedAnnotations {
+  title: string;
+  fileName: string;
+  markdown: string;
+  /** The Rust side can open a native share sheet (Android). */
+  nativeShare: boolean;
+}
