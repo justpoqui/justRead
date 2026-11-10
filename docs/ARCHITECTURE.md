@@ -249,7 +249,7 @@ No app-specific syntax: any Markdown or text app can read it. justRead does not 
 apps' folders.
 
 The **Export** row in the Highlights panel sends it anywhere:
-- **Share…**: Android uses our own plugin `crates/tauri-plugin-justshare` (Kotlin, ~60 lines):
+- **Share…**: Android uses our own plugin `crates/tauri-plugin-justdevice` (Kotlin, ~60 lines):
   the file goes to a private cache folder, is exposed read-only through the plugin's own
   `FileProvider`, and `ACTION_SEND` carries both the `.md` file and the text, so the system share
   sheet lists every app that takes either. iOS, Windows and macOS use the web Share API
@@ -277,6 +277,19 @@ The **Export** row in the Highlights panel sends it anywhere:
   2 % of the book of data.
 - **Library:** a Continue reading row (books on the Reading shelf, most recent first) and filter
   chips for shelves and collections, persisted with the other library preferences.
+
+### Screen timeout while reading
+
+While a book is open the reader replaces the device's screen timeout (Settings → Screen; on by
+default on phones and tablets): the screen is kept on, **dims** after 2 minutes without activity
+(taps, keys, page turns, scrolling), and **soft-locks** 30 seconds later. A touch on the dim
+screen only brightens it; the lock needs a double-tap (or Enter twice), and the back button
+can't leave the book meanwhile. After 5 minutes locked the keep-on is released so the device's
+own sleep applies. Timing logic: `ui/src/lib/screen/idle.ts` (unit-tested); overlay and device
+calls: `ScreenGuard.svelte`. Android does keep-on (`FLAG_KEEP_SCREEN_ON`) and dimming (window
+`screenBrightness`) natively in our plugin `crates/tauri-plugin-justdevice` (formerly
+`-justshare`, which now holds both the share sheet and screen control); other platforms use the
+web Wake Lock API and a dark overlay.
 
 ### Chapter isolation
 

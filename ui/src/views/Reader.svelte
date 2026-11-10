@@ -23,6 +23,7 @@
   import { toast } from "../lib/stores/toasts.svelte";
   import { onBack } from "../lib/back";
   import { ReadingTracker } from "../lib/stats/tracker";
+  import ScreenGuard from "../components/ScreenGuard.svelte";
 
   let { id, onclose }: { id: string; onclose: () => void } = $props();
 
@@ -39,6 +40,8 @@
   let settingsOpen = $state(false);
   /** End of the book reached: offer to move it to the Finished shelf (once per visit). */
   let endPrompt = $state<"show" | "done" | null>(null);
+  /** The reader's screen timeout (dim / soft lock). */
+  let screen = $state<ScreenGuard | undefined>();
   /** Where the reader was before a jump from the Position popup ("Back to where you were"). */
   let returnTo = $state<string | null>(null);
   let chrome = $state(true);
@@ -61,6 +64,8 @@
   // Esc and the Android back button close the topmost thing that is open;
   // with nothing open they leave the book. Always consumes the press.
   function back(): boolean {
+    // The screen guard first: while dim or locked, back must not leave the book.
+    if (screen?.back()) return true;
     if (editing) editing = null;
     else if (settingsOpen) settingsOpen = false;
     else if (layoutMenu) layoutMenu = false;
@@ -135,6 +140,7 @@
         engine.on("relocate", (e) => {
           where = e;
           tracker.moved(e.progression);
+          screen?.activity();
           // The last page of the book: offer the Finished shelf.
           const m = book?.manifest;
           const atEnd = e.progression >= 0.995 || (!!m && m.layout !== "fixed" && e.spine === m.spine.length - 1 && e.pages > 0 && e.page === e.pages);
@@ -145,6 +151,7 @@
         });
         engine.on("selection", (s) => {
           tracker.active();
+          screen?.activity();
           selection = s;
           active = null;
         });
@@ -157,8 +164,14 @@
           void navigator.clipboard?.writeText(url).catch(() => {});
           toast(`External link copied: ${url}`);
         });
-        engine.on("key", onKey);
-        engine.on("center", () => (chrome = !chrome));
+        // Keys pressed inside the book page: the screen guard sees them first.
+        engine.on("key", (e) => {
+          if (!screen?.key(e)) onKey(e);
+        });
+        engine.on("center", () => {
+          screen?.activity();
+          chrome = !chrome;
+        });
         engine.on("zoom", (f) => {
           settings.zoom = Math.min(5, Math.max(0.5, Math.round(settings.zoom * f * 100) / 100));
           saveSettings();
@@ -500,6 +513,7 @@
   {#if settingsOpen}
     <SettingsScreen {fixed} onclose={() => (settingsOpen = false)} />
   {/if}
+  <ScreenGuard bind:this={screen} enabled={settings.screenGuard} dimAfter={settings.dimAfter} lockAfter={settings.lockAfter} />
 
   {#if selection}
     <!-- Phones show their own Copy/Share bar for selections, so ours omits Copy there. -->

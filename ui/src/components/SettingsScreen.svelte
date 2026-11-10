@@ -5,19 +5,21 @@
   import SettingsPanel from "./SettingsPanel.svelte";
   import ToolbarSettings from "./ToolbarSettings.svelte";
   import { settings, saveSettings } from "../lib/settings/store.svelte";
-  import { PROGRESS_DISPLAYS } from "../lib/settings/reader-settings";
+  import { DIM_AFTER_CHOICES, LOCK_AFTER_CHOICES, PROGRESS_DISPLAYS } from "../lib/settings/reader-settings";
 
   let { fixed = false, onclose }: { fixed?: boolean; onclose: () => void } = $props();
 
   // STEP 1: categories. PDFs/comics have page fitting instead of typography.
-  type Cat = "layout" | "text" | "theme" | "toolbar" | "progress";
+  type Cat = "layout" | "text" | "theme" | "toolbar" | "progress" | "screen";
   const cats = $derived<{ id: Cat; label: string }[]>([
     { id: "layout", label: "Layout" },
     { id: "text", label: fixed ? "Page & zoom" : "Text" },
     { id: "theme", label: "Theme" },
     { id: "toolbar", label: "Toolbar" },
     { id: "progress", label: "Page indicator" },
+    { id: "screen", label: "Screen" },
   ]);
+  const minutes = (s: number) => (s < 60 ? `${s} seconds` : `${s / 60} minute${s === 60 ? "" : "s"}`);
   let cat = $state<Cat>("layout");
   const label = $derived(cats.find((c) => c.id === cat)!.label);
 </script>
@@ -39,6 +41,23 @@
         <SettingsPanel {fixed} sections={[cat]} headings={false} />
       {:else if cat === "toolbar"}
         <ToolbarSettings />
+      {:else if cat === "screen"}
+        <label class="check"><input type="checkbox" bind:checked={settings.screenGuard} onchange={saveSettings} /> Keep the screen on while reading</label>
+        <p class="hint">Your device’s own screen timeout is replaced by these while a book is open.</p>
+        <label class="row">Dim after
+          <select bind:value={settings.dimAfter} onchange={saveSettings} disabled={!settings.screenGuard}>
+            {#each DIM_AFTER_CHOICES as s (s)}<option value={s}>{minutes(s)}</option>{/each}
+          </select>
+        </label>
+        <label class="row">Then lock after
+          <select bind:value={settings.lockAfter} onchange={saveSettings} disabled={!settings.screenGuard}>
+            {#each LOCK_AFTER_CHOICES as s (s)}<option value={s}>{s === 0 ? "Never" : minutes(s)}</option>{/each}
+          </select>
+        </label>
+        <p class="hint">
+          A touch on the dimmed screen only brightens it. The lock needs a double-tap (or Enter twice), so the book
+          can’t be bumped in a pocket or bag. After 5 minutes locked, your device may sleep as usual.
+        </p>
       {:else}
         <p class="hint">What the indicator at the bottom shows. Tap it while reading to switch.</p>
         <div class="choices" role="radiogroup" aria-label="Page indicator">
@@ -123,6 +142,17 @@
     display: flex;
     flex-direction: column;
     gap: 10px;
+  }
+  .check,
+  .row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    margin: 6px 0;
+  }
+  .row {
+    justify-content: space-between;
+    max-width: 360px;
   }
   .choices label {
     display: flex;

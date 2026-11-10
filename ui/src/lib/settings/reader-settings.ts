@@ -4,6 +4,8 @@
 // Reader settings model: typography, theme and layout. Stored as JSON in
 // the SQLite `settings` table under the key "reader".
 
+import { isMobile } from "../platform";
+
 export type FontChoice = "publisher" | "serif" | "sans" | "humanist" | "mono" | "custom";
 export type ThemeId = "light" | "sepia" | "dark" | "black" | "custom";
 export type FlowMode = "paginated" | "scrolled";
@@ -60,7 +62,16 @@ export interface ReaderSettings {
   /** Where the toolbar buttons sit (back, title and ⚙ always stay on top). */
   toolbarPosition: "top" | "bottom";
   progressDisplay: ProgressDisplay;
+  /** The reader's own screen timeout: keep the screen on, dim, then soft-lock. */
+  screenGuard: boolean;
+  /** Seconds without activity before dimming. */
+  dimAfter: number;
+  /** Seconds after dimming before the soft lock (0 = never). */
+  lockAfter: number;
 }
+
+export const DIM_AFTER_CHOICES = [60, 120, 300, 600];
+export const LOCK_AFTER_CHOICES = [0, 15, 30, 60];
 
 export const DEFAULT_SETTINGS: ReaderSettings = {
   font: "serif",
@@ -81,6 +92,10 @@ export const DEFAULT_SETTINGS: ReaderSettings = {
   toolbar: [...DEFAULT_TOOLBAR],
   toolbarPosition: "bottom",
   progressDisplay: "chapterPages",
+  // On by default on phones and tablets, where the device timeout interrupts reading.
+  screenGuard: isMobile,
+  dimAfter: 120,
+  lockAfter: 30,
 };
 
 /** System font stacks — nothing is downloaded or bundled (offline, no OFL dependency). */
@@ -134,6 +149,9 @@ export function sanitizeSettings(raw: unknown): ReaderSettings {
     : [...DEFAULT_TOOLBAR];
   if (!["top", "bottom"].includes(s.toolbarPosition)) s.toolbarPosition = "bottom";
   if (!PROGRESS_DISPLAYS.some((p) => p.id === s.progressDisplay)) s.progressDisplay = "chapterPages";
+  s.screenGuard = typeof s.screenGuard === "boolean" ? s.screenGuard : DEFAULT_SETTINGS.screenGuard;
+  if (!DIM_AFTER_CHOICES.includes(s.dimAfter)) s.dimAfter = DEFAULT_SETTINGS.dimAfter;
+  if (!LOCK_AFTER_CHOICES.includes(s.lockAfter)) s.lockAfter = DEFAULT_SETTINGS.lockAfter;
   // A custom font name is inserted into CSS: allow only safe characters.
   s.customFont = String(s.customFont ?? "").replace(/[^\p{L}\p{N} _-]/gu, "").slice(0, 64);
   s.customColors = { ...DEFAULT_SETTINGS.customColors, ...(s.customColors ?? {}) };

@@ -234,6 +234,44 @@ try {
   const w2 = (await page.locator(".jr-page").first().boundingBox()).width;
   check(w2 < w1, "pinch in zooms back out", `${Math.round(w1)} → ${Math.round(w2)}px`);
 
+  // STEP 9: the reader's screen timeout — dim after 2 min, soft lock 30 s later, double-tap unlocks.
+  await page.locator('button[title="Back to library (Esc)"]').click();
+  await page.waitForSelector(".card");
+  await page.clock.install(); // fake time from here on (still flowing normally)
+  await page.locator(".card", { hasText: "The Lantern Harbor" }).first().click();
+  await page.waitForFunction(() => document.querySelector(".host iframe")?.contentDocument?.querySelector("[data-jrb]"));
+  await settle(800);
+  const posBefore = await pos();
+  await page.clock.fastForward("01:50");
+  await settle(300);
+  check((await page.locator(".guard").count()) === 0, "still awake before 2 minutes");
+  await page.clock.fastForward("00:12");
+  await settle(300);
+  const dimCall = await page.evaluate(() => window.__jr.calls.filter((c) => c.cmd === "set_screen").pop()?.args);
+  check((await page.locator(".guard.dim").count()) === 1 && dimCall?.dim === true && dimCall?.keepOn === true, "dims after 2 minutes (screen kept on)", JSON.stringify(dimCall));
+  await page.touchscreen.tap(vp.width * 0.85, vp.height / 2); // would turn the page if awake
+  await settle(400);
+  check((await page.locator(".guard").count()) === 0 && (await pos()) === posBefore, "first touch on a dim screen only brightens it", await pos());
+  await page.clock.fastForward("02:31");
+  await settle(300);
+  check((await page.locator(".guard.locked").count()) === 1, "soft-locks 30 seconds after dimming");
+  await page.screenshot({ path: join(shots, "m6-soft-lock.png") });
+  await page.touchscreen.tap(vp.width / 2, vp.height / 2);
+  await settle(300);
+  check((await page.locator(".guard.locked").count()) === 1, "a single tap does not unlock");
+  const backed = await page.evaluate(() => window.__justreadBack());
+  check(backed === true && (await page.locator(".host").count()) === 1, "back button can't leave the book while locked");
+  await page.clock.fastForward("00:02");
+  await page.touchscreen.tap(vp.width / 2, vp.height / 2);
+  await page.touchscreen.tap(vp.width / 2, vp.height / 2);
+  await settle(400);
+  const undim = await page.evaluate(() => window.__jr.calls.filter((c) => c.cmd === "set_screen").pop()?.args);
+  check((await page.locator(".guard").count()) === 0 && undim?.dim === false, "double-tap unlocks and restores brightness", JSON.stringify(undim));
+  await page.locator('button[title="Back to library (Esc)"]').click();
+  await settle(300);
+  const off = await page.evaluate(() => window.__jr.calls.filter((c) => c.cmd === "set_screen").pop()?.args);
+  check(off?.keepOn === false && off?.dim === false, "leaving the book hands the screen back to the device", JSON.stringify(off));
+
   check(errors.length === 0, "no page errors", errors.slice(0, 3).join(" | "));
 } catch (e) {
   failures++;

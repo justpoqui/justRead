@@ -1,6 +1,6 @@
 // Copyright 2026 The justRead Authors
 // SPDX-License-Identifier: Apache-2.0
-// Android library for tauri-plugin-justshare (standard Tauri plugin layout).
+// Android library for tauri-plugin-justdevice (standard Tauri plugin layout).
 
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
@@ -10,7 +10,7 @@ plugins {
 }
 
 android {
-    namespace = "app.justread.share"
+    namespace = "app.justread.device"
     compileSdk = 35
 
     defaultConfig {

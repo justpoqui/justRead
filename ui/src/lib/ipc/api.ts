@@ -53,6 +53,8 @@ export const api = {
     invoke<void>("record_reading", { bookId, day, seconds, progress }),
   readingStats: (today: string, days: number) => invoke<ReadingStats>("reading_stats", { today, days }),
   bookStats: (bookId: string) => invoke<BookStats>("book_stats", { bookId }),
+  // Reader screen timeout (native on Android; a no-op elsewhere).
+  setScreen: (keepOn: boolean, dim: boolean) => invoke<void>("set_screen", { keepOn, dim }),
   openBrowser: () => invoke<void>("open_browser"),
   takePendingOpen: () => invoke<string[]>("take_pending_open"),
   // Bytes travel as a number array; covers are small (~30 KB JPEG).

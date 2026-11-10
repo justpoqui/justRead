@@ -30,8 +30,8 @@ tauri = { version = "2", features = ["unstable"] }  # Apache-2.0 OR MIT
 tauri-plugin-dialog = "2"                         # Apache-2.0 OR MIT
 # Reads files the OS hands us as URIs (Android content://, iOS security-scoped).
 tauri-plugin-fs = "2"                             # Apache-2.0 OR MIT
-# Our own: the Android share sheet for highlight exports (Phase 7).
-tauri-plugin-justshare.workspace = true
+# Our own: Android share sheet (Phase 7) and reader screen control.
+tauri-plugin-justdevice.workspace = true
 # Already in the dependency tree via Tauri; used directly by the justBrowse proxy.
 tokio = { version = "1", features = ["net", "io-util", "time", "rt", "sync", "macros"] } # MIT
 

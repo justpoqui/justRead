@@ -1858,7 +1858,7 @@ dependencies = [
  "tauri-build",
  "tauri-plugin-dialog",
  "tauri-plugin-fs",
- "tauri-plugin-justshare",
+ "tauri-plugin-justdevice",
  "tempfile",
  "tokio",
  "webkit2gtk",
@@ -3699,7 +3699,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "tauri-plugin-justshare"
+name = "tauri-plugin-justdevice"
 version = "0.1.0"
 dependencies = [
  "serde",

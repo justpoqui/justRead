@@ -8,7 +8,7 @@ members = [
     "crates/justread-locator",
     "crates/justread-formats",
     "crates/justread-library",
-    "crates/tauri-plugin-justshare",
+    "crates/tauri-plugin-justdevice",
     "src-tauri",
 ]
 
@@ -26,7 +26,7 @@ justbook = { path = "crates/justbook" }
 justread-locator = { path = "crates/justread-locator" }
 justread-formats = { path = "crates/justread-formats" }
 justread-library = { path = "crates/justread-library" }
-tauri-plugin-justshare = { path = "crates/tauri-plugin-justshare" }
+tauri-plugin-justdevice = { path = "crates/tauri-plugin-justdevice" }
 
 # Third-party (licenses listed in docs/THIRD_PARTY.md)
 serde = { version = "1", features = ["derive"] }   # MIT OR Apache-2.0

@@ -173,6 +173,8 @@ export async function installBackend() {
         const rows = state.reading.filter((r) => r.bookId === args.bookId);
         return { seconds: rows.reduce((a, r) => a + r.seconds, 0), daysRead: new Set(rows.map((r) => r.day)).size, firstDay: null, lastDay: null, progressRead: 0, secondsLeft: null };
       }
+      case "set_screen":
+        return null;
       case "take_pending_open":
         return [];
       case "set_cover":

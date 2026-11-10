@@ -10,6 +10,7 @@ mod commands;
 mod export;
 mod open_files;
 mod protocol;
+mod screen;
 mod state;
 mod stats;
 
@@ -24,8 +25,8 @@ pub fn run() {
         // any fs permission.
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
-        // Phase 7: native share sheet for exports (Android; no JS commands of its own).
-        .plugin(tauri_plugin_justshare::init())
+        // Our Android integrations: share sheet, screen keep-on/dim (no JS commands of its own).
+        .plugin(tauri_plugin_justdevice::init())
         .manage(open_files::PendingOpen::default())
         .manage(browse::BrowseState::default())
         // STEP 2: serve book packages to the reader iframe.
@@ -68,6 +69,7 @@ pub fn run() {
             stats::record_reading,
             stats::reading_stats,
             stats::book_stats,
+            screen::set_screen,
             browse::open_browser,
             browse::browse_navigate,
             browse::browse_history,

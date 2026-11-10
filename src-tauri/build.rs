@@ -41,6 +41,8 @@ const COMMANDS: &[&str] = &[
     "record_reading",
     "reading_stats",
     "book_stats",
+    // Reader screen timeout (keep on / dim)
+    "set_screen",
     // justBrowse (granted to the toolbar webview only, except open_browser)
     "take_pending_open",
     "open_browser",

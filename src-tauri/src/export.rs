@@ -41,7 +41,7 @@ fn build(state: &AppState, book_id: &str) -> CmdResult<ExportedAnnotations> {
         markdown: export::annotations_markdown(&book, &list, &export::iso_date(now_ms())),
         file_name: export::export_file_name(&book.title),
         title: format!("{} — highlights", book.title),
-        native_share: tauri_plugin_justshare::supported(),
+        native_share: tauri_plugin_justdevice::supported(),
     })
 }
 
@@ -57,9 +57,9 @@ pub fn export_annotations(
 #[tauri::command]
 pub async fn share_annotations(app: AppHandle, book_id: String) -> CmdResult<()> {
     let doc = build(&app.state::<AppState>(), &book_id)?;
-    tauri_plugin_justshare::share(
+    tauri_plugin_justdevice::share(
         &app,
-        tauri_plugin_justshare::ShareRequest {
+        tauri_plugin_justdevice::ShareRequest {
             title: doc.title,
             text: doc.markdown,
             file_name: doc.file_name,

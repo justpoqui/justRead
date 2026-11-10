@@ -2,15 +2,15 @@
 # SPDX-License-Identifier: Apache-2.0
 
 [package]
-name = "tauri-plugin-justshare"
-description = "Opens the system share sheet (Android) so exports can go to any app."
+name = "tauri-plugin-justdevice"
+description = "Small Android integrations for justRead: share sheet and reader screen control."
 version = "0.1.0"
 edition.workspace = true
 license.workspace = true
 authors.workspace = true
 publish = false
 # Required by tauri-plugin's build script (it links the Android project).
-links = "tauri-plugin-justshare"
+links = "tauri-plugin-justdevice"
 
 [dependencies]
 serde.workspace = true
