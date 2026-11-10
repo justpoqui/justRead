@@ -14,8 +14,12 @@ export interface FrameHooks {
   /** Click on plain text/background; x,y are relative to the iframe viewport. */
   tap(x: number, y: number, frame: HTMLIFrameElement): void;
   wheel(e: WheelEvent): void;
-  /** Horizontal swipe inside the chapter (touch screens). */
-  swipe(direction: "left" | "right"): void;
+  /** Horizontal swipe inside the chapter (touch screens): turn the page. */
+  swipe(direction: "left" | "right", frame: HTMLIFrameElement): void;
+  /** A horizontal drag in progress: the page follows the finger by `dx` px. */
+  drag(dx: number, frame: HTMLIFrameElement): void;
+  /** The drag ended without turning the page: put it back. */
+  dragEnd(frame: HTMLIFrameElement): void;
 }
 
 /**
@@ -76,16 +80,36 @@ export function wireFrame(doc: Document, spine: number, frame: HTMLIFrameElement
   const onUp = () => setTimeout(() => hooks.selection(doc, spine, frame), 0);
   const onWheel = (e: WheelEvent) => hooks.wheel(e);
 
-  // STEP 3: touch — swipes turn pages; long-press selections are reported via
-  // selectionchange because phones send no mouseup after selecting.
+  // STEP 3: touch — the page follows a horizontal drag and a swipe turns it;
+  // long-press selections are reported via selectionchange because phones
+  // send no mouseup after selecting. Screen coordinates, because the iframe
+  // itself moves with the finger.
   const tracker = new GestureTracker();
-  const onTouchStart = (e: TouchEvent) => tracker.touch(points(e.touches), e.timeStamp, true);
-  const onTouchMove = (e: TouchEvent) => tracker.touch(points(e.touches), e.timeStamp, false);
+  let dragging = false;
+  const selecting = () => {
+    const sel = doc.getSelection();
+    return !!sel && !sel.isCollapsed;
+  };
+  const onTouchStart = (e: TouchEvent) => tracker.touch(points(e.touches, true), e.timeStamp, true);
+  const onTouchMove = (e: TouchEvent) => {
+    tracker.touch(points(e.touches, true), e.timeStamp, false);
+    const dx = tracker.dragOffset();
+    if (dx !== null && !selecting()) {
+      dragging = true;
+      hooks.drag(dx, frame);
+    } else if (dragging) {
+      dragging = false;
+      hooks.dragEnd(frame);
+    }
+  };
+  // touchcancel counts too: a WebView that takes over the gesture sends it instead of touchend.
   const onTouchEnd = (e: TouchEvent) => {
     if (e.touches.length > 0) return;
-    const g = tracker.end(e.timeStamp);
-    const sel = doc.getSelection();
-    if (g?.kind === "swipe" && (!sel || sel.isCollapsed)) hooks.swipe(g.direction);
+    const g = tracker.end(e.timeStamp, frame.clientWidth);
+    const wasDragging = dragging;
+    dragging = false;
+    if (g?.kind === "swipe" && !selecting()) hooks.swipe(g.direction, frame);
+    else if (wasDragging) hooks.dragEnd(frame);
   };
   let selTimer = 0;
   const onSelectionChange = () => {
@@ -101,12 +125,14 @@ export function wireFrame(doc: Document, spine: number, frame: HTMLIFrameElement
   doc.addEventListener("touchstart", onTouchStart, { passive: true });
   doc.addEventListener("touchmove", onTouchMove, { passive: true });
   doc.addEventListener("touchend", onTouchEnd, { passive: true });
+  doc.addEventListener("touchcancel", onTouchEnd, { passive: true });
   doc.addEventListener("selectionchange", onSelectionChange);
   return () => {
     clearTimeout(selTimer);
     doc.removeEventListener("touchstart", onTouchStart);
     doc.removeEventListener("touchmove", onTouchMove);
     doc.removeEventListener("touchend", onTouchEnd);
+    doc.removeEventListener("touchcancel", onTouchEnd);
     doc.removeEventListener("selectionchange", onSelectionChange);
     doc.removeEventListener("keydown", onKey);
     doc.removeEventListener("click", onClick);

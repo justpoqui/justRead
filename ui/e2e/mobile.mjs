@@ -64,14 +64,17 @@ const pos = () => page.locator(".pos-full").textContent();
 async function touch(type, pts) {
   await cdp.send("Input.dispatchTouchEvent", { type, touchPoints: pts.map(([x, y], id) => ({ x, y, id })) });
 }
-async function swipe(x1, y, x2) {
+async function swipe(x1, y, x2, { stepMs = 16, end = "touchEnd", during } = {}) {
   await touch("touchStart", [[x1, y]]);
   for (let i = 1; i <= 6; i++) {
     await touch("touchMove", [[x1 + ((x2 - x1) * i) / 6, y]]);
-    await page.waitForTimeout(16);
+    await page.waitForTimeout(stepMs);
   }
-  await touch("touchEnd", []);
+  if (during) await during();
+  // touchCancel: what a WebView sends when it takes over a gesture.
+  await touch(end, []);
 }
+const frameShift = () => page.evaluate(() => document.querySelector(".host iframe").style.transform);
 async function pinch(cx, cy, from, to) {
   await touch("touchStart", [[cx - from, cy], [cx + from, cy]]);
   for (let i = 1; i <= 8; i++) {
@@ -105,6 +108,28 @@ try {
   await swipe(vp.width * 0.2, vp.height * 0.5, vp.width * 0.8);
   await settle();
   check(/Page 1 of/.test(await pos()), "swipe right turns back", await pos());
+  // The page follows the finger, and a slow but long drag still turns it (real thumbs are slow).
+  let mid = "";
+  await swipe(vp.width * 0.85, vp.height * 0.5, vp.width * 0.25, { stepMs: 200, during: async () => (mid = await frameShift()) });
+  await settle();
+  check(/translateX\(-\d/.test(mid) && /Page 2 of/.test(await pos()), "page follows the finger; a slow long drag turns it", `${mid} → ${await pos()}`);
+  check((await frameShift()) === "", "the new page settles in place", await frameShift());
+  // A gesture the WebView cancels still counts.
+  await swipe(vp.width * 0.8, vp.height * 0.5, vp.width * 0.2, { end: "touchCancel" });
+  await settle();
+  check(/Page 3 of/.test(await pos()), "a cancelled touch still turns the page", await pos());
+  // A short, slow drag changes nothing and the page slides back.
+  await swipe(vp.width * 0.5, vp.height * 0.5, vp.width * 0.4, { stepMs: 200 });
+  await settle();
+  check(/Page 3 of/.test(await pos()) && (await frameShift()) === "", "a short drag slides back without turning", `${await pos()} ${await frameShift()}`);
+  for (let i = 0; i < 2; i++) {
+    await swipe(vp.width * 0.2, vp.height * 0.5, vp.width * 0.8);
+    await settle();
+  }
+  // At the very start of the book there is nothing before: the page slides back.
+  await swipe(vp.width * 0.2, vp.height * 0.5, vp.width * 0.8);
+  await settle();
+  check(/Page 1 of/.test(await pos()) && (await frameShift()) === "", "swiping back on the first page slides back", `${await pos()} ${await frameShift()}`);
   await page.screenshot({ path: join(shots, "m2-reader.png") });
 
   // STEP 5: a long-press selection reports through selectionchange (no mouseup on phones).

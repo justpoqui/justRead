@@ -278,6 +278,18 @@ The **Export** row in the Highlights panel sends it anywhere:
 - **Library:** a Continue reading row (books on the Reading shelf, most recent first) and filter
   chips for shelves and collections, persisted with the other library preferences.
 
+### Swiping between pages
+
+In paginated layouts a horizontal drag moves the page with the finger; a drag past 20 % of the
+page width (at any speed) or a quick flick (≥ 30 px within 300 ms) turns it, and the page slides
+out while the next one slides in from the other side (`ui/src/lib/reader/slide.ts`; skipped under
+"reduce motion"). Shorter drags slide back, and so does a swipe past the first or last page. The
+direction is fixed after 10 px, so vertical movement never turns pages. `touchcancel` is treated
+like `touchend`, because a WebView that takes over a gesture sends it instead. Inside chapter
+iframes, distances use screen coordinates (the iframe moves with the finger). Recognition:
+`gestures.ts` (unit-tested); comics and PDFs share it (mirrored for right-to-left, and only when
+the page isn't zoomed in).
+
 ### Screen timeout while reading
 
 While a book is open the reader replaces the device's screen timeout (Settings → Screen; on by

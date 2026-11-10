@@ -8,6 +8,7 @@
 // visible area. Switching layout, spread, font or size re-renders and then
 // displays that same locator, so the reader never loses their place.
 
+import { followFinger, slideBack, slideTurn } from "./slide";
 import type { Annotation, Manifest } from "../ipc/types";
 import type { ReaderSettings } from "../settings/reader-settings";
 import { buildSrcdoc } from "./chapter-doc";
@@ -313,19 +314,33 @@ export class ReaderEngine implements Engine {
         else if (this.settings.flow === "paginated" && hx > third * 2) void this.next();
         else this.emit("center", undefined);
       },
-      swipe: (direction) => {
+      swipe: (direction, frame) => {
         // Paginated only (scrolling uses the native vertical pan). Swiping
-        // left reveals the next page, mirrored for right-to-left books.
-        if (this.settings.flow !== "paginated") return;
+        // left reveals the next page; the page slides out and the new one in.
+        if (this.settings.flow !== "paginated") return slideBack(frame);
         const forward = direction === "left";
-        void (forward ? this.next() : this.prev());
+        void slideTurn(frame, forward, this.opts.host.clientWidth, async () => {
+          const before = this.pagePosition();
+          await (forward ? this.next() : this.prev());
+          return this.pagePosition() !== before;
+        });
       },
+      drag: (dx, frame) => {
+        if (this.settings.flow === "paginated") followFinger(frame, dx);
+      },
+      dragEnd: (frame) => slideBack(frame),
       wheel: (e) => {
         if (this.settings.flow !== "paginated") return;
         e.preventDefault();
         this.wheelTurn(e.deltaY || e.deltaX);
       },
     };
+  }
+
+  /** Where the paginated view is (chapter and page), to tell whether a turn moved. */
+  private pagePosition(): string {
+    const p = this.view?.pageInfo();
+    return `${this.view?.visibleRange()?.start.spine}:${p?.page}`;
   }
 
   private wheelLock = 0;

@@ -22,6 +22,7 @@ import { formatLocator, parseLocator, type FixedLocator } from "../reader/locato
 import { buildSpreads, fitScreen, screenOfPage, scrollPageSize, type Size } from "./layout";
 import type { PageSource } from "./sources";
 import { GestureTracker, points } from "../reader/gestures";
+import { followFinger, slideBack, slideTurn } from "../reader/slide";
 
 type Listener<T> = (v: T) => void;
 
@@ -369,20 +370,37 @@ export class FixedEngine implements Engine {
     const tracker = new GestureTracker();
     this.root.style.touchAction = "pan-x pan-y"; // we handle pinch ourselves
     this.root.addEventListener("touchstart", (e) => tracker.touch(points(e.touches), e.timeStamp, true), { passive: true });
+    // Pages follow the finger only when they fit (zoomed in, one finger pans instead).
+    const canSwipe = () => this.settings.flow === "paginated" && this.root.scrollWidth <= this.root.clientWidth + 1;
+    let dragging = false;
     this.root.addEventListener("touchmove", (e) => {
       tracker.touch(points(e.touches), e.timeStamp, false);
       if (e.touches.length > 1) e.preventDefault(); // no browser page-zoom
-    }, { passive: false });
-    this.root.addEventListener("touchend", (e) => {
-      if (e.touches.length > 0) return;
-      const g = tracker.end(e.timeStamp);
-      if (g?.kind === "pinch") this.emit("zoom", g.scale);
-      else if (g?.kind === "swipe" && this.settings.flow === "paginated" && this.root.scrollWidth <= this.root.clientWidth + 1) {
-        // Swipe left = forward, mirrored for right-to-left comics.
-        const forward = (g.direction === "left") !== this.rtl;
-        void (forward ? this.next() : this.prev());
+      const dx = tracker.dragOffset();
+      if (dx !== null && canSwipe()) {
+        dragging = true;
+        followFinger(this.root, dx);
       }
-    }, { passive: true });
+    }, { passive: false });
+    // touchcancel counts too: a WebView that takes over the gesture sends it instead of touchend.
+    const onEnd = (e: TouchEvent) => {
+      if (e.touches.length > 0) return;
+      const g = tracker.end(e.timeStamp, this.root.clientWidth);
+      const wasDragging = dragging;
+      dragging = false;
+      if (g?.kind === "pinch") this.emit("zoom", g.scale);
+      else if (g?.kind === "swipe" && canSwipe()) {
+        // Swipe left = forward, mirrored for right-to-left comics; the page slides the way the finger went.
+        const forward = (g.direction === "left") !== this.rtl;
+        void slideTurn(this.root, g.direction === "left", this.root.clientWidth, async () => {
+          const before = this.screen;
+          await (forward ? this.next() : this.prev());
+          return this.screen !== before;
+        });
+      } else if (wasDragging) slideBack(this.root);
+    };
+    this.root.addEventListener("touchend", onEnd, { passive: true });
+    this.root.addEventListener("touchcancel", onEnd, { passive: true });
   }
 
   private wheelLock = 0;
