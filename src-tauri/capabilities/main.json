@@ -41,6 +41,8 @@
     "allow-reading-stats",
     "allow-book-stats",
     "allow-set-screen",
+    "allow-check-update",
+    "allow-install-update",
     "allow-open-browser",
     "allow-take-pending-open"
   ]

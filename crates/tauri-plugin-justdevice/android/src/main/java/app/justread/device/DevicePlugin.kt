@@ -6,14 +6,21 @@ package app.justread.device
 import android.app.Activity
 import android.content.ClipData
 import android.content.Intent
+import android.net.Uri
+import android.os.Build
+import android.provider.Settings
 import android.view.WindowManager
 import androidx.core.content.FileProvider
 import app.tauri.annotation.Command
 import app.tauri.annotation.InvokeArg
 import app.tauri.annotation.TauriPlugin
 import app.tauri.plugin.Invoke
+import app.tauri.plugin.JSObject
 import app.tauri.plugin.Plugin
 import java.io.File
+import java.net.HttpURLConnection
+import java.net.URL
+import java.security.MessageDigest
 
 /** Our own provider subclass: a unique class name keeps manifest merging conflict-free. */
 class ShareFileProvider : FileProvider()
@@ -31,6 +38,21 @@ class ScreenArgs {
     var keepOn: Boolean = false
     var dim: Boolean = false
 }
+
+@InvokeArg
+class ReleaseArgs {
+    lateinit var repo: String
+}
+
+@InvokeArg
+class InstallArgs {
+    lateinit var repo: String
+    lateinit var apkUrl: String
+    lateinit var sha256Url: String
+}
+
+/** GitHub "owner/name". */
+private val REPO_PATTERN = Regex("^[A-Za-z0-9-]+/[A-Za-z0-9._-]+$")
 
 /** Low brightness used while the reader is dimmed (0..1 of the panel's range). */
 private const val DIM_BRIGHTNESS = 0.02f
@@ -90,5 +112,103 @@ class DevicePlugin(private val activity: Activity) : Plugin(activity) {
             window.attributes = attrs
         }
         invoke.resolve()
+    }
+
+    // ----- updates ------------------------------------------------------------
+    // The network part of the updater lives here so it uses Android's own TLS
+    // and certificate store. Both commands only ever talk to the repository's
+    // own GitHub release URLs; the Rust side decides what to install.
+
+    /** The latest GitHub release of `repo`, as the API's JSON text. */
+    @Command
+    fun latestRelease(invoke: Invoke) {
+        val args = invoke.parseArgs(ReleaseArgs::class.java)
+        if (!REPO_PATTERN.matches(args.repo)) return invoke.reject("bad repository name")
+        Thread {
+            try {
+                val text = get(URL("https://api.github.com/repos/${args.repo}/releases/latest"))
+                    .bufferedReader(Charsets.UTF_8).use { it.readText() }
+                val result = JSObject()
+                result.put("json", text)
+                invoke.resolve(result)
+            } catch (e: Exception) {
+                invoke.reject(e.message ?: "Could not reach GitHub")
+            }
+        }.start()
+    }
+
+    /**
+     * Download the release APK, check it against the published SHA-256, and
+     * open Android's installer (which also checks it is signed with the same
+     * key as this app). The person confirms the install; it is never silent.
+     */
+    @Command
+    fun downloadAndInstall(invoke: Invoke) {
+        val args = invoke.parseArgs(InstallArgs::class.java)
+        val prefix = "https://github.com/${args.repo}/releases/download/"
+        if (!REPO_PATTERN.matches(args.repo) || !args.apkUrl.startsWith(prefix) || !args.sha256Url.startsWith(prefix)) {
+            return invoke.reject("refusing a download from outside the app's releases")
+        }
+        // STEP 1: Android 8+: the person must allow this app to install updates (once).
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !activity.packageManager.canRequestPackageInstalls()) {
+            activity.startActivity(
+                Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:${activity.packageName}"))
+            )
+            return invoke.reject("permission")
+        }
+        Thread {
+            try {
+                // STEP 2: the expected checksum (first word of the .sha256 file).
+                val expected = get(URL(args.sha256Url)).bufferedReader().use { it.readText() }
+                    .trim().split(Regex("\\s+")).first().lowercase()
+                if (!Regex("^[0-9a-f]{64}$").matches(expected)) throw Exception("bad checksum file")
+
+                // STEP 3: download, hashing as we go.
+                val dir = File(activity.cacheDir, "updates").apply { mkdirs() }
+                dir.listFiles()?.forEach { it.delete() }
+                val apk = File(dir, "justRead-update.apk")
+                val digest = MessageDigest.getInstance("SHA-256")
+                get(URL(args.apkUrl)).use { input ->
+                    apk.outputStream().use { out ->
+                        val buf = ByteArray(64 * 1024)
+                        while (true) {
+                            val n = input.read(buf)
+                            if (n < 0) break
+                            digest.update(buf, 0, n)
+                            out.write(buf, 0, n)
+                        }
+                    }
+                }
+                val actual = digest.digest().joinToString("") { "%02x".format(it) }
+                if (actual != expected) {
+                    apk.delete()
+                    throw Exception("The download was damaged (checksum mismatch). Try again.")
+                }
+
+                // STEP 4: hand it to the system installer.
+                val uri = FileProvider.getUriForFile(activity, "${activity.packageName}.justdevice.files", apk)
+                val intent = Intent(Intent.ACTION_VIEW).apply {
+                    setDataAndType(uri, "application/vnd.android.package-archive")
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                activity.runOnUiThread { activity.startActivity(intent) }
+                invoke.resolve()
+            } catch (e: Exception) {
+                invoke.reject(e.message ?: "Download failed")
+            }
+        }.start()
+    }
+
+    /** HTTPS GET (redirects followed; GitHub requires a User-Agent). */
+    private fun get(url: URL): java.io.InputStream {
+        if (url.protocol != "https") throw Exception("https only")
+        val conn = url.openConnection() as HttpURLConnection
+        conn.instanceFollowRedirects = true
+        conn.connectTimeout = 15_000
+        conn.readTimeout = 30_000
+        conn.setRequestProperty("User-Agent", "justRead-updater")
+        conn.setRequestProperty("Accept", "application/vnd.github+json")
+        if (conn.responseCode !in 200..299) throw Exception("GitHub answered ${conn.responseCode}")
+        return conn.inputStream
     }
 }

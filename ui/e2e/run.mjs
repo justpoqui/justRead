@@ -137,7 +137,7 @@ try {
   check((await inBar("bottom", "Contents")) === 1 && (await inBar("top", "Contents")) === 0, "toolbar buttons sit in the bottom bar by default");
   await page.locator('.top button[title="Settings"]').click();
   const cats = await page.locator('nav[aria-label="Settings categories"] button').allInnerTexts();
-  check(JSON.stringify(cats) === JSON.stringify(["Layout", "Text", "Theme", "Toolbar", "Page indicator", "Screen"]), "settings are grouped by category", cats.join(","));
+  check(JSON.stringify(cats) === JSON.stringify(["Layout", "Text", "Theme", "Toolbar", "Page indicator", "Screen", "Updates"]), "settings are grouped by category", cats.join(","));
   await page.locator('nav[aria-label="Settings categories"] button', { hasText: "Toolbar" }).click();
   await page.screenshot({ path: join(shots, "04b-settings-toolbar.png") });
   await page.locator(".screen li", { hasText: "Contents" }).locator("input").click();

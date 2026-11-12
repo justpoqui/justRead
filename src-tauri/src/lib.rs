@@ -13,6 +13,7 @@ mod protocol;
 mod screen;
 mod state;
 mod stats;
+mod updater;
 
 use tauri::Manager;
 
@@ -29,6 +30,7 @@ pub fn run() {
         .plugin(tauri_plugin_justdevice::init())
         .manage(open_files::PendingOpen::default())
         .manage(browse::BrowseState::default())
+        .manage(updater::PendingUpdate::default())
         // STEP 2: serve book packages to the reader iframe.
         .register_asynchronous_uri_scheme_protocol(protocol::SCHEME, protocol::handle)
         // STEP 3: open the library in the per-user app data directory.
@@ -70,6 +72,8 @@ pub fn run() {
             stats::reading_stats,
             stats::book_stats,
             screen::set_screen,
+            updater::check_update,
+            updater::install_update,
             browse::open_browser,
             browse::browse_navigate,
             browse::browse_history,

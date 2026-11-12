@@ -3,6 +3,9 @@
 An open-source, cross-platform ebook reader: part of the **just** suite.
 
 * **Offline only.** No accounts, no cloud, no telemetry, no analytics. Everything stays on your device.
+  The one exception is the Android update check (asks GitHub about once a day whether a newer
+  version is published; sends nothing about you; can be turned off in Settings → Updates).
+  See [docs/RELEASES.md](docs/RELEASES.md).
 * **Your books, any layout.** Paginated, two-page spread or continuous scroll; switch at any time without losing your place.
 * **Apache-2.0**, written from scratch.
 

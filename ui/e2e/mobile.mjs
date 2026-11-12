@@ -96,6 +96,15 @@ try {
   check((await page.locator("text=Find books").count()) === 0, "justBrowse button hidden on phones (desktop-only for now)");
   await page.screenshot({ path: join(shots, "m1-library.png") });
 
+  // STEP 3b: the daily update check shows a banner; Update downloads and opens the installer.
+  await page.waitForSelector(".banner", { timeout: 5000 });
+  check(/0\.2\.12 is available/.test(await page.locator(".banner").innerText()), "update banner in the library", await page.locator(".banner").innerText());
+  await page.locator(".banner button", { hasText: "Update" }).click();
+  await settle(300);
+  check(await page.evaluate(() => window.__jr.calls.some((c) => c.cmd === "install_update")), "Update downloads and opens the installer");
+  await page.locator(".banner button", { hasText: "Later" }).click();
+  check((await page.locator(".banner").count()) === 0, "Later hides the banner");
+
   // STEP 4: swipe through an EPUB.
   await page.locator(".card", { hasText: "The Lantern Harbor" }).click();
   await page.waitForFunction(() => document.querySelector(".host iframe")?.contentDocument?.querySelector("[data-jrb]"));

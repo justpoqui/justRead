@@ -173,6 +173,10 @@ export async function installBackend() {
         const rows = state.reading.filter((r) => r.bookId === args.bookId);
         return { seconds: rows.reduce((a, r) => a + r.seconds, 0), daysRead: new Set(rows.map((r) => r.day)).size, firstDay: null, lastDay: null, progressRead: 0, secondsLeft: null };
       }
+      case "check_update":
+        return { current: "0.2.10", supported: true, available: { version: "0.2.12", notes: "Swipe fixes", publishedAt: null } };
+      case "install_update":
+        return null;
       case "set_screen":
         return null;
       case "take_pending_open":

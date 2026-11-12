@@ -8,6 +8,7 @@
   import Icon from "../components/Icon.svelte";
   import BookCover from "../components/BookCover.svelte";
   import BookSheet from "../components/BookSheet.svelte";
+  import UpdateBanner from "../components/UpdateBanner.svelte";
   import { api } from "../lib/ipc/api";
   import type { BookSummary, Collection, ImportResult, SortKey } from "../lib/ipc/types";
   import { libraryPrefs, saveLibraryPrefs } from "../lib/settings/store.svelte";
@@ -275,6 +276,7 @@
   </header>
 
   <main>
+    <UpdateBanner />
     {#if !search && !filtered && continueReading.length}
       <section class="continue" aria-label="Continue reading">
         <h2>Continue reading</h2>

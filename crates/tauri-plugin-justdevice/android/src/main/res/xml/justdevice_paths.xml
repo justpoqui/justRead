@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Copyright 2026 The justRead Authors. SPDX-License-Identifier: Apache-2.0 -->
-<!-- Only the cache sub-folder used for shared exports is reachable. -->
+<!-- Only the cache sub-folders for shared exports and downloaded updates are reachable. -->
 <paths>
     <cache-path name="shared" path="justshare/" />
+    <cache-path name="updates" path="updates/" />
 </paths>

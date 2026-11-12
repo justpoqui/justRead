@@ -43,6 +43,9 @@ const COMMANDS: &[&str] = &[
     "book_stats",
     // Reader screen timeout (keep on / dim)
     "set_screen",
+    // In-app updates (Android)
+    "check_update",
+    "install_update",
     // justBrowse (granted to the toolbar webview only, except open_browser)
     "take_pending_open",
     "open_browser",

@@ -5,12 +5,14 @@
   import SettingsPanel from "./SettingsPanel.svelte";
   import ToolbarSettings from "./ToolbarSettings.svelte";
   import { settings, saveSettings } from "../lib/settings/store.svelte";
+  import { updates, checkNow, savePrefs, install, isAndroid } from "../lib/updates.svelte";
+  import { toast } from "../lib/stores/toasts.svelte";
   import { DIM_AFTER_CHOICES, LOCK_AFTER_CHOICES, PROGRESS_DISPLAYS } from "../lib/settings/reader-settings";
 
   let { fixed = false, onclose }: { fixed?: boolean; onclose: () => void } = $props();
 
   // STEP 1: categories. PDFs/comics have page fitting instead of typography.
-  type Cat = "layout" | "text" | "theme" | "toolbar" | "progress" | "screen";
+  type Cat = "layout" | "text" | "theme" | "toolbar" | "progress" | "screen" | "updates";
   const cats = $derived<{ id: Cat; label: string }[]>([
     { id: "layout", label: "Layout" },
     { id: "text", label: fixed ? "Page & zoom" : "Text" },
@@ -18,7 +20,12 @@
     { id: "toolbar", label: "Toolbar" },
     { id: "progress", label: "Page indicator" },
     { id: "screen", label: "Screen" },
+    { id: "updates", label: "Updates" },
   ]);
+  async function updateNow() {
+    const r = await install();
+    if (r === "permission") toast("Allow justRead to install updates on the screen that opened, then tap Update again.", "info", 9000);
+  }
   const minutes = (s: number) => (s < 60 ? `${s} seconds` : `${s / 60} minute${s === 60 ? "" : "s"}`);
   let cat = $state<Cat>("layout");
   const label = $derived(cats.find((c) => c.id === cat)!.label);
@@ -41,6 +48,29 @@
         <SettingsPanel {fixed} sections={[cat]} headings={false} />
       {:else if cat === "toolbar"}
         <ToolbarSettings />
+      {:else if cat === "updates"}
+        {#if isAndroid}
+          <label class="check"><input type="checkbox" bind:checked={updates.prefs.auto} onchange={savePrefs} /> Check for updates automatically</label>
+          <p class="hint">
+            About once a day justRead asks GitHub whether a newer version is published. That is the only time it goes
+            online; nothing about you or your books is sent.
+          </p>
+          <div class="row">
+            <button class="btn" onclick={checkNow} disabled={updates.checking}>{updates.checking ? "Checking…" : "Check now"}</button>
+            <span class="hint">{updates.info ? `You have ${updates.info.current}` : ""}</span>
+          </div>
+          {#if updates.info?.available}
+            <p>Version <strong>{updates.info.available.version}</strong> is available.</p>
+            {#if updates.info.available.notes}<pre class="notes">{updates.info.available.notes}</pre>{/if}
+            <button class="btn primary" onclick={updateNow} disabled={updates.installing}>{updates.installing ? "Downloading…" : "Download and install"}</button>
+            <p class="hint">Android shows its install screen; tap Update there. Your books and settings stay.</p>
+          {:else if updates.info && !updates.checking}
+            <p class="hint">You have the latest version.</p>
+          {/if}
+          {#if updates.error}<p class="error">{updates.error}</p>{/if}
+        {:else}
+          <p class="hint">In-app updates are available in the Android app. On computers, download new versions from the justRead releases page on GitHub.</p>
+        {/if}
       {:else if cat === "screen"}
         <label class="check"><input type="checkbox" bind:checked={settings.screenGuard} onchange={saveSettings} /> Keep the screen on while reading</label>
         <p class="hint">Your device’s own screen timeout is replaced by these while a book is open.</p>
@@ -153,6 +183,30 @@
   .row {
     justify-content: space-between;
     max-width: 360px;
+  }
+  .btn {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: none;
+    padding: 6px 14px;
+    cursor: pointer;
+  }
+  .btn.primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+  }
+  .notes {
+    white-space: pre-wrap;
+    font: inherit;
+    font-size: 13px;
+    color: var(--muted);
+    max-height: 160px;
+    overflow: auto;
+  }
+  .error {
+    color: #c0392b;
+    font-size: 13px;
   }
   .choices label {
     display: flex;

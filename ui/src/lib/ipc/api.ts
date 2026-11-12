@@ -18,6 +18,7 @@ import type {
   Collection,
   ReadingStats,
   BookStats,
+  UpdateInfo,
 } from "./types";
 
 export const api = {
@@ -55,6 +56,9 @@ export const api = {
   bookStats: (bookId: string) => invoke<BookStats>("book_stats", { bookId }),
   // Reader screen timeout (native on Android; a no-op elsewhere).
   setScreen: (keepOn: boolean, dim: boolean) => invoke<void>("set_screen", { keepOn, dim }),
+  // In-app updates (Android): GitHub Releases of the justRead repository.
+  checkUpdate: () => invoke<UpdateInfo>("check_update"),
+  installUpdate: () => invoke<void>("install_update"),
   openBrowser: () => invoke<void>("open_browser"),
   takePendingOpen: () => invoke<string[]>("take_pending_open"),
   // Bytes travel as a number array; covers are small (~30 KB JPEG).

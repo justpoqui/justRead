@@ -99,3 +99,69 @@ pub fn screen<R: Runtime>(app: &AppHandle<R>, keep_on: bool, dim: bool) -> Resul
         Ok(())
     }
 }
+
+// ----- updates (Android) ---------------------------------------------------------
+// The HTTP part runs in Kotlin (Android's own TLS); see DevicePlugin.kt.
+
+/// The latest GitHub release of `repo` ("owner/name"), as the API's JSON text.
+pub fn latest_release_json<R: Runtime>(app: &AppHandle<R>, repo: &str) -> Result<String, String> {
+    #[cfg(target_os = "android")]
+    {
+        #[derive(serde::Deserialize)]
+        struct Reply {
+            json: String,
+        }
+        #[derive(Serialize)]
+        struct Args<'a> {
+            repo: &'a str,
+        }
+        app.state::<Handle<R>>()
+            .0
+            .run_mobile_plugin::<Reply>("latestRelease", Args { repo })
+            .map(|r| r.json)
+            .map_err(|e| e.to_string())
+    }
+    #[cfg(not(target_os = "android"))]
+    {
+        let _ = (app, repo);
+        Err("In-app updates are only available on Android.".into())
+    }
+}
+
+/// Download a release APK, verify it against its published SHA-256 and open
+/// the system installer. Errors with "permission" when the person first has
+/// to allow installs from justRead (the settings page has been opened).
+pub fn download_and_install<R: Runtime>(
+    app: &AppHandle<R>,
+    repo: &str,
+    apk_url: &str,
+    sha256_url: &str,
+) -> Result<(), String> {
+    #[cfg(target_os = "android")]
+    {
+        #[derive(Serialize)]
+        #[serde(rename_all = "camelCase")]
+        struct Args<'a> {
+            repo: &'a str,
+            apk_url: &'a str,
+            sha256_url: &'a str,
+        }
+        app.state::<Handle<R>>()
+            .0
+            .run_mobile_plugin::<serde::de::IgnoredAny>(
+                "downloadAndInstall",
+                Args {
+                    repo,
+                    apk_url,
+                    sha256_url,
+                },
+            )
+            .map(|_| ())
+            .map_err(|e| e.to_string())
+    }
+    #[cfg(not(target_os = "android"))]
+    {
+        let _ = (app, repo, apk_url, sha256_url);
+        Err("In-app updates are only available on Android.".into())
+    }
+}

@@ -278,6 +278,16 @@ The **Export** row in the Highlights panel sends it anywhere:
 - **Library:** a Continue reading row (books on the Reading shelf, most recent first) and filter
   chips for shelves and collections, persisted with the other library preferences.
 
+### Updates (Android)
+
+`src-tauri/src/updater.rs` + the Kotlin side of `tauri-plugin-justdevice`: check the latest GitHub
+Release of the (public) repository, compare versions, download `justRead.apk`, verify it against
+`justRead.apk.sha256`, and open the system installer (which also enforces the same signing key).
+The repository is fixed in Rust and the Kotlin code only accepts that repository's API and
+release-download URLs, so the webview can't point the updater anywhere else. HTTP runs in Kotlin
+(Android's TLS and certificate store; no Rust TLS stack added). Signing, versioning and the
+one-time key setup: [RELEASES.md](RELEASES.md).
+
 ### Swiping between pages
 
 In paginated layouts a horizontal drag moves the page with the finger; a drag past 20 % of the

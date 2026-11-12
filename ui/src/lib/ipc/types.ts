@@ -171,3 +171,10 @@ export interface ExportedAnnotations {
   /** The Rust side can open a native share sheet (Android). */
   nativeShare: boolean;
 }
+
+/** In-app update check (Android). */
+export interface UpdateInfo {
+  current: string;
+  supported: boolean;
+  available: { version: string; notes: string; publishedAt: string | null } | null;
+}

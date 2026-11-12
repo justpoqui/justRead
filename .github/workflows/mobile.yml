@@ -20,8 +20,14 @@ permissions:
 jobs:
   android:
     runs-on: ubuntu-24.04
+    # Publishing GitHub Releases (the in-app updater's source) needs write access.
+    permissions:
+      contents: write
     env:
       NDK_VERSION: "27.2.12479018"
+      # Signed releases need the permanent key (docs/RELEASES.md). Without it the
+      # job falls back to a debug APK artifact, as before.
+      HAS_KEY: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -53,13 +59,62 @@ jobs:
         # Generated projects start with Tauri's default icons; copy ours in
         # (src-tauri/icons/android, made by `tauri icon` + scripts/make-icon.py).
         run: cp -r src-tauri/icons/android/. src-tauri/gen/android/app/src/main/res/
+      # Every build gets a higher version (0.2.<run number>), so Android accepts
+      # it as an update and the in-app updater can tell it is newer.
+      - name: Version
+        run: |
+          BASE=$(node -p "require('./src-tauri/tauri.conf.json').version.split('.').slice(0,2).join('.')")
+          echo "VERSION=$BASE.${{ github.run_number }}" >> "$GITHUB_ENV"
+
+      # ----- without the signing key: debug build, as before --------------------
       - name: Build a debug APK (arm64)
-        run: pnpm tauri android build --debug --apk --target aarch64
+        if: env.HAS_KEY != 'true'
+        run: pnpm tauri android build --debug --apk --target aarch64 --config "{\"version\":\"$VERSION\"}"
       - uses: actions/upload-artifact@v4
+        if: env.HAS_KEY != 'true'
         with:
           name: justread-android-debug
           path: src-tauri/gen/android/app/build/outputs/apk/**/*.apk
           if-no-files-found: error
+
+      # ----- with the signing key: signed release build -------------------------
+      - name: Build a release APK (arm64)
+        if: env.HAS_KEY == 'true'
+        run: pnpm tauri android build --apk --target aarch64 --config "{\"version\":\"$VERSION\"}"
+      - name: Sign with the justRead key
+        if: env.HAS_KEY == 'true'
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KS_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASS: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          BT="$ANDROID_HOME/build-tools/35.0.0"
+          UNSIGNED=$(find src-tauri/gen/android/app/build/outputs/apk -name '*release*.apk' | head -1)
+          echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/justread.jks"
+          "$BT/zipalign" -p -f 4 "$UNSIGNED" "$RUNNER_TEMP/aligned.apk"
+          "$BT/apksigner" sign --ks "$RUNNER_TEMP/justread.jks" --ks-key-alias "$KEY_ALIAS" \
+            --ks-pass env:KS_PASS --key-pass env:KEY_PASS --out justRead.apk "$RUNNER_TEMP/aligned.apk"
+          "$BT/apksigner" verify --print-certs justRead.apk | head -3
+          sha256sum justRead.apk > justRead.apk.sha256
+          rm -f "$RUNNER_TEMP/justread.jks"
+      - uses: actions/upload-artifact@v4
+        if: env.HAS_KEY == 'true'
+        with:
+          name: justread-android
+          path: justRead.apk
+          if-no-files-found: error
+      # Published from the development branches only (not every feature branch).
+      - name: Publish the GitHub Release (the in-app updater reads the latest one)
+        if: env.HAS_KEY == 'true' && (github.ref_name == 'main' || github.ref_name == 'ccr-bc429417-7g7n6y')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git log -1 --format='%B' | sed '/^Co-Authored-By:/d;/^Claude-Session:/d' > "$RUNNER_TEMP/notes.md"
+          gh release create "android-v$VERSION" justRead.apk justRead.apk.sha256 \
+            --title "justRead $VERSION (Android)" --notes-file "$RUNNER_TEMP/notes.md" \
+            --target "$GITHUB_SHA" --latest
 
   ios:
     runs-on: macos-15
