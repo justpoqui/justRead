@@ -59,6 +59,28 @@ jobs:
         # Generated projects start with Tauri's default icons; copy ours in
         # (src-tauri/icons/android, made by `tauri icon` + scripts/make-icon.py).
         run: cp -r src-tauri/icons/android/. src-tauri/gen/android/app/src/main/res/
+      # Which signing values are set up (yes/no only; values are never printed).
+      # Values added under "Variables" instead of "Secrets" are reported too, so
+      # a mix-up is easy to spot.
+      - name: Signing setup check
+        env:
+          S1: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
+          S2: ${{ secrets.ANDROID_KEYSTORE_PASSWORD != '' }}
+          S3: ${{ secrets.ANDROID_KEY_ALIAS != '' }}
+          S4: ${{ secrets.ANDROID_KEY_PASSWORD != '' }}
+          V1: ${{ vars.ANDROID_KEYSTORE_BASE64 != '' }}
+          V2: ${{ vars.ANDROID_KEYSTORE_PASSWORD != '' }}
+          V3: ${{ vars.ANDROID_KEY_ALIAS != '' }}
+          V4: ${{ vars.ANDROID_KEY_PASSWORD != '' }}
+        run: |
+          echo "secret ANDROID_KEYSTORE_BASE64:   $S1   (as a variable: $V1)"
+          echo "secret ANDROID_KEYSTORE_PASSWORD: $S2   (as a variable: $V2)"
+          echo "secret ANDROID_KEY_ALIAS:         $S3   (as a variable: $V3)"
+          echo "secret ANDROID_KEY_PASSWORD:      $S4   (as a variable: $V4)"
+          if [ "$S1$S2$S3$S4" != "truetruetruetrue" ]; then
+            echo "::warning title=Signing key not set up::Missing repository secrets (see docs/RELEASES.md); building the debug APK instead."
+          fi
+
       # Every build gets a higher version (0.2.<run number>), so Android accepts
       # it as an update and the in-app updater can tell it is newer.
       - name: Version
