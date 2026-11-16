@@ -13,7 +13,12 @@
 //!   "not encrypted" warning (HTTPS-only by default);
 //! * destinations that resolve to this machine (loopback, unspecified,
 //!   link-local) are refused, after DNS resolution, so a web page can't
-//!   reach local services or this proxy — including via DNS rebinding.
+//!   reach local services or this proxy — including via DNS rebinding;
+//! * destinations on the local network (private ranges such as 192.168.x.x,
+//!   10.x, IPv6 unique-local) are refused too, so a web page can't attack the
+//!   router, printers or other devices at home. A host the user explicitly
+//!   allowed (the "not encrypted" prompt, e.g. a Calibre server on the LAN)
+//!   may still be reached.
 
 use std::collections::HashSet;
 use std::net::{IpAddr, SocketAddr};
@@ -198,6 +203,16 @@ fn refuse(gate: &Gate, host: &str, port_ok: bool, _tls: bool) -> Option<u16> {
     if !gate.allow_loopback && is_local_name(host) {
         return Some(403);
     }
+    // An address literal on the local network: only if the user allowed it.
+    if !gate.allow_loopback
+        && host
+            .trim_matches(['[', ']'])
+            .parse::<IpAddr>()
+            .is_ok_and(is_private_ip)
+        && !gate.http_ok(host)
+    {
+        return Some(403);
+    }
     None
 }
 
@@ -207,8 +222,13 @@ async fn connect(gate: &Gate, host: &str, port: u16) -> Option<TcpStream> {
         .await
         .ok()?
         .ok()?;
+    // A name that resolves into the home network needs the user's explicit allowance.
+    let lan_ok = gate.allow_loopback || gate.http_ok(host);
     for addr in addrs {
         if !gate.allow_loopback && is_local_ip(addr.ip()) {
+            continue;
+        }
+        if !lan_ok && is_private_ip(addr.ip()) {
             continue;
         }
         if let Ok(Ok(s)) = tokio::time::timeout(CONNECT_TIMEOUT, TcpStream::connect(addr)).await {
@@ -233,6 +253,39 @@ fn is_local_ip(ip: IpAddr) -> bool {
                 || v.is_unspecified()
                 || v.to_ipv4_mapped()
                     .is_some_and(|m| m.is_loopback() || m.is_unspecified() || m.is_link_local())
+        }
+    }
+}
+
+/// Addresses on a local or special-purpose network (not the public internet).
+fn is_private_ip(ip: IpAddr) -> bool {
+    match ip {
+        IpAddr::V4(v) => {
+            let o = v.octets();
+            v.is_private()                                  // 10/8, 172.16/12, 192.168/16
+                || (o[0] == 100 && (o[1] & 0xc0) == 64)     // 100.64/10 carrier-grade NAT
+                || (o[0] == 198 && (o[1] & 0xfe) == 18)     // 198.18/15 benchmarking
+                || (o[0] == 192 && o[1] == 0 && o[2] == 0)  // 192.0.0/24 protocol assignments
+                || o[0] == 0                                // 0/8 "this network"
+                || v.is_multicast()
+                || v.is_broadcast()
+                || o[0] >= 240                              // 240/4 reserved
+                || is_local_ip(ip)
+        }
+        IpAddr::V6(v) => {
+            let s = v.segments();
+            (s[0] & 0xfe00) == 0xfc00                       // fc00::/7 unique local
+                || (s[0] & 0xffc0) == 0xfe80                // fe80::/10 link-local
+                || (s[0] & 0xffc0) == 0xfec0                // fec0::/10 old site-local
+                || v.is_multicast()
+                || is_local_ip(ip)
+                // IPv4 inside IPv6 (mapped ::ffff:a.b.c.d, NAT64 64:ff9b::/96).
+                || v.to_ipv4_mapped().is_some_and(|m| is_private_ip(IpAddr::V4(m)))
+                || (s[0..6] == [0x64, 0xff9b, 0, 0, 0, 0] && {
+                    let [a, b] = s[6].to_be_bytes();
+                    let [c, d] = s[7].to_be_bytes();
+                    is_private_ip(IpAddr::V4(std::net::Ipv4Addr::new(a, b, c, d)))
+                })
         }
     }
 }
@@ -324,8 +377,48 @@ mod tests {
             "CONNECT [::1]:443 HTTP/1.1\r\n\r\n",
             "CONNECT 169.254.169.254:443 HTTP/1.1\r\n\r\n",
             "CONNECT example.org:22 HTTP/1.1\r\n\r\n",
+            // The home network: router, NAS, printers.
+            "CONNECT 192.168.1.1:443 HTTP/1.1\r\n\r\n",
+            "CONNECT 10.0.0.1:443 HTTP/1.1\r\n\r\n",
+            "CONNECT [fd00::1]:443 HTTP/1.1\r\n\r\n",
+            "CONNECT [::ffff:192.168.0.1]:443 HTTP/1.1\r\n\r\n",
         ] {
             assert!(ask(p, req).await.starts_with("HTTP/1.1 403"), "{req}");
+        }
+    }
+
+    #[test]
+    fn classifies_private_addresses() {
+        let private = |s: &str| is_private_ip(s.parse().unwrap());
+        for a in [
+            "10.1.2.3",
+            "172.16.0.1",
+            "172.31.255.255",
+            "192.168.0.10",
+            "100.64.0.1",
+            "169.254.1.1",
+            "127.0.0.1",
+            "0.0.0.0",
+            "224.0.0.1",
+            "255.255.255.255",
+            "fd12::1",
+            "fe80::1",
+            "::1",
+            "::ffff:10.0.0.1",
+            "64:ff9b::c0a8:0101",
+            "ff02::1",
+        ] {
+            assert!(private(a), "{a} should be private");
+        }
+        for a in [
+            "93.184.216.34",
+            "172.32.0.1",
+            "100.128.0.1",
+            "8.8.8.8",
+            "2606:4700::1111",
+            "64:ff9b::808:808",
+        ] {
+            assert!(!private(a), "{a} should be public");
         }
     }
 

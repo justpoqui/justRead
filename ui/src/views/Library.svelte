@@ -1,7 +1,6 @@
 <!-- Copyright 2026 The justRead Authors. SPDX-License-Identifier: Apache-2.0 -->
 <script lang="ts">
   import { onMount } from "svelte";
-  import { open as openDialog } from "@tauri-apps/plugin-dialog";
   import { getCurrentWebview } from "@tauri-apps/api/webview";
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import { listen } from "@tauri-apps/api/event";
@@ -134,9 +133,16 @@
   }
 
   async function pickFiles() {
-    const extensions = await api.supportedExtensions();
-    const picked = await openDialog({ multiple: true, directory: false, filters: [{ name: "Books", extensions }] });
-    if (picked) await importPaths(Array.isArray(picked) ? picked : [picked]);
+    // The picker is opened by Rust, which imports exactly what was chosen.
+    importing = true;
+    try {
+      report(await api.pickAndImport());
+      await refresh();
+    } catch (e) {
+      toast(String(e), "error");
+    } finally {
+      importing = false;
+    }
   }
 
   async function remove(book: BookSummary) {

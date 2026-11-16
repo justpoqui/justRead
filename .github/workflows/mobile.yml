@@ -40,7 +40,7 @@ jobs:
         run: |
           SDKM=$(ls -d "$ANDROID_HOME"/cmdline-tools/*/bin/sdkmanager | sort -V | tail -1)
           yes | "$SDKM" --licenses > /dev/null
-          "$SDKM" --install "platforms;android-35" "build-tools;35.0.0" "platform-tools" "ndk;${NDK_VERSION}"
+          "$SDKM" --install "platforms;android-35" "platforms;android-36" "build-tools;35.0.0" "platform-tools" "ndk;${NDK_VERSION}"
           echo "NDK_HOME=$ANDROID_HOME/ndk/$NDK_VERSION" >> "$GITHUB_ENV"
       - uses: dtolnay/rust-toolchain@stable
         with:

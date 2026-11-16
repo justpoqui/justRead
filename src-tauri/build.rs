@@ -16,6 +16,7 @@ const COMMANDS: &[&str] = &[
     "list_books",
     "get_book",
     "import_books",
+    "pick_and_import",
     "delete_book",
     "open_book",
     "read_chapter",

@@ -67,3 +67,9 @@ multiple-versions = "allow"
 
 [advisories]
 # Advisory checks need network access to the RustSec database; run them in CI.
+ignore = [
+    # proc-macro-error is *unmaintained* (not vulnerable): a build-time macro
+    # helper pulled in by gtk-rs 0.18 through Tauri/wry on Linux. It never
+    # ships in the app and goes away when Tauri moves to newer GTK bindings.
+    { id = "RUSTSEC-2024-0370", reason = "unmaintained build-time macro via gtk-rs 0.18 (Tauri); no vulnerability" },
+]

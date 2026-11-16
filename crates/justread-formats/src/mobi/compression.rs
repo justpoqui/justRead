@@ -88,6 +88,12 @@ fn backward_size(data: &[u8], end: usize) -> usize {
     result
 }
 
+/// Largest decompressed size of one HUFF text record or dictionary entry.
+/// Real text records hold about 4 KB; dictionary entries can refer to one
+/// another, so without a cap a small crafted file could double its output at
+/// every level and exhaust memory (a "decompression bomb").
+pub const MAX_RECORD_OUT: usize = 256 * 1024;
+
 /// Mobipocket "HUFF/CDIC" Huffman decompressor.
 pub struct Huff {
     /// Per top byte: (code length, terminal?, max code).
@@ -217,7 +223,12 @@ impl Huff {
                 self.dict[r] = (full.clone(), true);
                 full
             };
-            out.extend_from_slice(&piece);
+            // STEP 4: never more than MAX_RECORD_OUT (see its doc comment).
+            let room = MAX_RECORD_OUT - out.len();
+            out.extend_from_slice(&piece[..piece.len().min(room)]);
+            if out.len() >= MAX_RECORD_OUT {
+                break;
+            }
         }
         out
     }
@@ -276,5 +287,34 @@ mod tests {
         let mut h = Huff::new(&huff, &[&cdic]).unwrap();
         // STEP 3: bits 1,0,0,1,1,0,1,0 → A B B A A B A B
         assert_eq!(h.unpack(&[0b1001_1010]), b"ABBAABAB");
+    }
+
+    #[test]
+    fn huffman_bomb_is_capped() {
+        // Same code table; entry 0 is *compressed* and refers to itself 15
+        // times (plus one literal). Unbounded, each nesting level multiplies
+        // the size by 15: one input byte would expand to ~15^32 bytes.
+        let mut huff = b"HUFF".to_vec();
+        huff.extend_from_slice(&24u32.to_be_bytes());
+        huff.extend_from_slice(&24u32.to_be_bytes());
+        huff.extend_from_slice(&(24u32 + 1024).to_be_bytes());
+        huff.extend_from_slice(&[0u8; 8]);
+        for _ in 0..256 {
+            huff.extend_from_slice(&((1u32 << 8) | 0x80 | 1).to_be_bytes());
+        }
+        huff.extend_from_slice(&[0u8; 256]);
+        let mut cdic = b"CDIC".to_vec();
+        cdic.extend_from_slice(&16u32.to_be_bytes());
+        cdic.extend_from_slice(&2u32.to_be_bytes());
+        cdic.extend_from_slice(&1u32.to_be_bytes());
+        cdic.extend_from_slice(&4u16.to_be_bytes());
+        cdic.extend_from_slice(&8u16.to_be_bytes());
+        cdic.extend_from_slice(&2u16.to_be_bytes()); // not expanded: compressed data follows
+        cdic.extend_from_slice(&[0xFE, 0xFF]); // fifteen references to entry 0 and one "B"
+        cdic.extend_from_slice(&(0x8000u16 | 1).to_be_bytes());
+        cdic.push(b'B');
+        let mut h = Huff::new(&huff, &[&cdic]).unwrap();
+        let out = h.unpack(&[0xFF]);
+        assert!(out.len() <= MAX_RECORD_OUT, "{}", out.len());
     }
 }

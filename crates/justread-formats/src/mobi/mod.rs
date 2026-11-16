@@ -207,7 +207,9 @@ impl Book {
             None
         };
 
-        // STEP 2: each text record, minus trailing entries, decompressed.
+        // STEP 2: each text record, minus trailing entries, decompressed
+        // (bounded: a crafted header could claim millions of records).
+        const MAX_TEXT: usize = 256 * 1024 * 1024;
         let mut out = Vec::new();
         for i in 1..=self.h.text_records as usize {
             let rec = self.db.record(self.base + i);
@@ -222,6 +224,12 @@ impl Book {
                         reason: format!("unknown compression {c}"),
                     })
                 }
+            }
+            if out.len() > MAX_TEXT {
+                return Err(FormatError::Invalid {
+                    format: "MOBI",
+                    reason: "text decompresses past the size limit".into(),
+                });
             }
         }
         if self.h.text_length > 0 {

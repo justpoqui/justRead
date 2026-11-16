@@ -88,6 +88,18 @@ pub fn is_newer(candidate: &str, current: &str) -> bool {
     }
 }
 
+/// Only plain download URLs of this repository's own releases are accepted
+/// (no `..`, encoded dots, queries or fragments that could lead elsewhere).
+fn is_release_url(url: &str) -> bool {
+    let prefix = format!("https://github.com/{REPO}/releases/download/");
+    let rest = url.strip_prefix(&prefix).unwrap_or("");
+    !rest.is_empty()
+        && !url.contains("..")
+        && !url.to_ascii_lowercase().contains("%2e")
+        && !url.contains(['?', '#', '\\', '@'])
+        && rest.split('/').count() == 2
+}
+
 /// Pick the newer release and its two assets out of GitHub's JSON.
 fn evaluate(json: &str, current: &str) -> CmdResult<Option<(Release, String, String)>> {
     let r: GhRelease =
@@ -100,6 +112,7 @@ fn evaluate(json: &str, current: &str) -> CmdResult<Option<(Release, String, Str
             .iter()
             .find(|a| a.name == name)
             .map(|a| a.browser_download_url.clone())
+            .filter(|u| is_release_url(u))
     };
     let (Some(apk), Some(sha)) = (url(APK_NAME), url(SHA_NAME)) else {
         return Ok(None); // a release without an Android build
@@ -184,5 +197,22 @@ mod tests {
         let no_apk = r#"{"tag_name":"v9.0.0","assets":[]}"#;
         assert!(evaluate(no_apk, "0.2.0").unwrap().is_none());
         assert!(evaluate("not json", "0.2.0").is_err());
+    }
+
+    #[test]
+    fn only_own_release_urls() {
+        let ok =
+            format!("https://github.com/{REPO}/releases/download/android-v0.2.20/justRead.apk");
+        assert!(is_release_url(&ok));
+        for bad in [
+            format!("https://github.com/{REPO}/releases/download/../../../evil/x/justRead.apk"),
+            format!("https://github.com/{REPO}/releases/download/%2E%2E/x/justRead.apk"),
+            format!("https://github.com/{REPO}/releases/download/v1/justRead.apk?x=1"),
+            "https://github.com/someone/else/releases/download/v1/justRead.apk".to_string(),
+            "http://github.com/justpoqui/justRead/releases/download/v1/justRead.apk".to_string(),
+            format!("https://github.com/{REPO}/releases/download/a/b/justRead.apk"),
+        ] {
+            assert!(!is_release_url(&bad), "{bad}");
+        }
     }
 }

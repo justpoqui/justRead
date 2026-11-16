@@ -156,6 +156,11 @@ try {
   await sleep(1200);
   const comic = await exec(() => [...document.querySelectorAll(".jr-page img")].map((i) => i.naturalWidth));
   check(comic.length >= 1 && comic.every((w) => w > 0), "comic pages load through justbook://", JSON.stringify(comic));
+
+  // STEP: security — the webview can't make the app import a file nobody chose.
+  const sneaky = await invoke("import_books", { paths: ["/etc/hostname"] });
+  check(Array.isArray(sneaky) && !sneaky[0]?.outcome && /Choose the file/.test(sneaky[0]?.error ?? ""),
+    "import refuses files the person didn't choose", JSON.stringify(sneaky));
   await shot("w7-comic.png");
 } catch (e) {
   failures++;

@@ -139,6 +139,13 @@ Migrations are append-only SQL tracked with `PRAGMA user_version`.
   `justbook:`; no objects, no form actions.
 * **`justbook://` protocol** (`protocol.rs`): `/<uuid>/<package path>` → file bytes. UUID-validated,
   traversal- and symlink-safe, never serves `manifest.json` or `original/`, `nosniff`, scripts denied.
+* **Only files the person chose are imported**: the Import picker is opened by Rust
+  (`pick_and_import`), files dropped on the window and "Open with" files are recorded as granted
+  (`open_files::GrantedPaths`, one use each), and `import_books` refuses any other path. The
+  webview has no dialog or fs permission, so even a script that slipped past the chapter defences
+  couldn't make the app read other files on the device.
+* **Size limits on webview input**: settings values and annotation quotes/notes are capped
+  (256 KB), on top of the per-command validation in the library crate.
 
 ## justBrowse (`src-tauri/src/browse`, `ui/src/browse`)
 
@@ -147,7 +154,10 @@ A separate window with two webviews: the **toolbar** (`browse.html`, our page; c
 capability, so zero IPC; incognito; autofill off; third-party cookies refused). All content traffic
 goes through a local **proxy** (`proxy.rs`) that applies the tracker/ad blocklist (`blocklist.txt`,
 original list) to every request, tunnels HTTPS without decryption, refuses plain HTTP unless the
-user accepted the warning for that host, and refuses local destinations after DNS resolution.
+user accepted the warning for that host, and refuses local destinations after DNS resolution:
+this machine (loopback, link-local) always, and the **home network** (RFC 1918, carrier-grade NAT,
+IPv6 unique-local and link-local, IPv4 inside IPv6) unless the person allowed that host, so web
+pages can't reach routers, printers or NAS boxes.
 Navigation policy and address-bar parsing are pure functions in `policy.rs` (DuckDuckGo by default;
 any `https://…{q}` template such as SearXNG). Book downloads are imported and the reader's library
 refreshes via a `library-changed` event. Details and platform caveats: adr/0008-justbrowse.md.
@@ -350,7 +360,8 @@ languages, and end-to-end runs in Chromium (mocked IPC) and in the real app on W
   layer (later). Annotations in fixed books are bookmarks only.
 * justBrowse: macOS < 14 has no proxy (no blocklist for sub-resources); Windows third-party cookie
   behaviour unverified; blocklist is domain-level and modest; Tauri `unstable` API dependency.
-* HUFF/CDIC-compressed MOBI is covered by a synthetic test only (no real sample available offline).
+* HUFF/CDIC-compressed MOBI is covered by a synthetic test only (no real sample available offline). Its output is capped
+  per record (256 KB) and per book (256 MB) against crafted self-referencing dictionaries.
 * DOCX: EMF/WMF images, text boxes, comments and tracked changes are not converted.
 * CBR import awaits a decision on the unRAR license (adr/0006).
 * Folder watch import is deferred (see open questions in the Phase 1 plan).

@@ -34,10 +34,15 @@ impl Library {
         {
             return Err(LibraryError::Invalid(format!("bad settings key {key:?}")));
         }
+        // Settings are small JSON objects; refuse anything huge (the webview is untrusted).
+        let text = value.to_string();
+        if text.len() > 256 * 1024 {
+            return Err(LibraryError::Invalid("setting value is too large".into()));
+        }
         self.conn().execute(
             "INSERT INTO settings (key, value) VALUES (?1, ?2)
              ON CONFLICT(key) DO UPDATE SET value = excluded.value",
-            params![key, value.to_string()],
+            params![key, text],
         )?;
         Ok(())
     }

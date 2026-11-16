@@ -61,15 +61,54 @@ pub struct ImportResult {
     pub drm: bool,
 }
 
-/// Import files chosen in the dialog or dropped on the window.
+/// Import files dropped on the window or handed over by "Open with".
+/// Only paths the person chose are accepted (see `open_files::GrantedPaths`).
 #[tauri::command]
 pub async fn import_books(app: AppHandle, paths: Vec<String>) -> CmdResult<Vec<ImportResult>> {
+    import_paths(app, paths).await
+}
+
+/// The Import button: the file picker is opened here, by Rust, so the
+/// webview never chooses which files are read. Empty if cancelled.
+#[tauri::command]
+pub async fn pick_and_import(app: AppHandle) -> CmdResult<Vec<ImportResult>> {
+    use tauri_plugin_dialog::{DialogExt, FilePath};
+    let extensions = app.state::<AppState>().registry.extensions();
+    let picked = app
+        .dialog()
+        .file()
+        .add_filter("Books", &extensions)
+        .blocking_pick_files()
+        .unwrap_or_default();
+    let paths: Vec<String> = picked
+        .into_iter()
+        .map(|p| match p {
+            FilePath::Path(p) => p.to_string_lossy().into_owned(),
+            FilePath::Url(u) => u.to_string(),
+        })
+        .collect();
+    crate::open_files::grant(&app, &paths);
+    import_paths(app, paths).await
+}
+
+async fn import_paths(app: AppHandle, paths: Vec<String>) -> CmdResult<Vec<ImportResult>> {
     // STEP 1: conversion is CPU/disk heavy — keep it off the async runtime.
     tauri::async_runtime::spawn_blocking(move || {
         let state = app.state::<AppState>();
         paths
             .into_iter()
             .map(|path| {
+                // STEP 1b: only files the person chose.
+                if !crate::open_files::take_grant(&app, &path) {
+                    return ImportResult {
+                        path,
+                        outcome: None,
+                        drm: false,
+                        error: Some(
+                            "Choose the file with Import, or drop it on the window.".into(),
+                        ),
+                    };
+                }
                 // STEP 2: one file at a time; a failure never aborts the batch.
                 // Paths or URIs (Android content://, iOS/macOS file://) are accepted.
                 let (file, temporary) = match crate::open_files::materialize(&app, &path) {

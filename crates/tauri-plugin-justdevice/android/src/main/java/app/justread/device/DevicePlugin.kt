@@ -146,7 +146,10 @@ class DevicePlugin(private val activity: Activity) : Plugin(activity) {
     fun downloadAndInstall(invoke: Invoke) {
         val args = invoke.parseArgs(InstallArgs::class.java)
         val prefix = "https://github.com/${args.repo}/releases/download/"
-        if (!REPO_PATTERN.matches(args.repo) || !args.apkUrl.startsWith(prefix) || !args.sha256Url.startsWith(prefix)) {
+        // Same rule as the Rust side: this repository's release downloads, nothing that could lead elsewhere.
+        fun ok(u: String) = u.startsWith(prefix) && !u.contains("..") && !u.lowercase().contains("%2e") &&
+            u.none { it == '?' || it == '#' || it == '\\' || it == '@' }
+        if (!REPO_PATTERN.matches(args.repo) || !ok(args.apkUrl) || !ok(args.sha256Url)) {
             return invoke.reject("refusing a download from outside the app's releases")
         }
         // STEP 1: Android 8+: the person must allow this app to install updates (once).

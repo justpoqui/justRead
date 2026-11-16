@@ -13,6 +13,17 @@ use crate::{
     db, Annotation, AnnotationKind, AnnotationPatch, Library, LibraryError, NewAnnotation, Result,
 };
 
+/// Longest quote / note / chapter title stored (characters are counted as
+/// bytes, generously: a whole chapter is far shorter than this).
+const MAX_TEXT: usize = 256 * 1024;
+
+fn check_len(what: &str, s: &str) -> Result<()> {
+    if s.len() > MAX_TEXT {
+        return Err(LibraryError::Invalid(format!("{what} is too long")));
+    }
+    Ok(())
+}
+
 /// Highlight colors the UI offers. Anything else is rejected.
 pub const COLORS: &[&str] = &["yellow", "green", "blue", "pink", "purple", "underline"];
 
@@ -45,6 +56,9 @@ impl Library {
                 }
             }
         }
+        check_len("quote", &a.quote)?;
+        check_len("note", &a.note)?;
+        check_len("chapter", a.chapter.as_deref().unwrap_or(""))?;
         let color = a.color.unwrap_or_else(|| "yellow".to_string());
         if !COLORS.contains(&color.as_str()) {
             return Err(LibraryError::Invalid(format!("unknown color {color}")));
@@ -107,6 +121,9 @@ impl Library {
             if !COLORS.contains(&c.as_str()) {
                 return Err(LibraryError::Invalid(format!("unknown color {c}")));
             }
+        }
+        if let Some(n) = &patch.note {
+            check_len("note", n)?;
         }
         // STEP 2: a highlight that gains a note becomes a note (and back).
         let note = patch.note.unwrap_or(current.note);

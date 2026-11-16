@@ -21,14 +21,33 @@ use tauri::Manager;
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
-        // STEP 1: the dialog plugin (Import picker) and the fs plugin, used only
-        // from Rust to read files the OS hands us as URIs. No webview is granted
-        // any fs permission.
+        // STEP 1: the dialog plugin (Import picker, Save) and the fs plugin, used
+        // only from Rust. No webview is granted any dialog or fs permission.
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         // Our Android integrations: share sheet, screen keep-on/dim (no JS commands of its own).
         .plugin(tauri_plugin_justdevice::init())
         .manage(open_files::PendingOpen::default())
+        .manage(open_files::GrantedPaths::default())
+        // Files dropped on the window were chosen by the person: they may be imported.
+        .on_webview_event(|webview, event| {
+            if let tauri::WebviewEvent::DragDrop(tauri::DragDropEvent::Drop { paths, .. }) = event {
+                let files: Vec<String> = paths
+                    .iter()
+                    .map(|p| p.to_string_lossy().into_owned())
+                    .collect();
+                open_files::grant(webview.app_handle(), &files);
+            }
+        })
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::DragDrop(tauri::DragDropEvent::Drop { paths, .. }) = event {
+                let files: Vec<String> = paths
+                    .iter()
+                    .map(|p| p.to_string_lossy().into_owned())
+                    .collect();
+                open_files::grant(window.app_handle(), &files);
+            }
+        })
         .manage(browse::BrowseState::default())
         .manage(updater::PendingUpdate::default())
         // STEP 2: serve book packages to the reader iframe.
@@ -48,6 +67,7 @@ pub fn run() {
             commands::list_books,
             commands::get_book,
             commands::import_books,
+            commands::pick_and_import,
             commands::delete_book,
             commands::open_book,
             commands::read_chapter,

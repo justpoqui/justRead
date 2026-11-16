@@ -26,6 +26,8 @@ export const api = {
   listBooks: (query: BookQuery) => invoke<BookSummary[]>("list_books", { query }),
   getBook: (id: string) => invoke<BookSummary>("get_book", { id }),
   importBooks: (paths: string[]) => invoke<ImportResult[]>("import_books", { paths }),
+  /** Import button: Rust opens the file picker and imports the chosen files. */
+  pickAndImport: () => invoke<ImportResult[]>("pick_and_import"),
   deleteBook: (id: string) => invoke<void>("delete_book", { id }),
   openBook: (id: string) => invoke<OpenedBook>("open_book", { id }),
   readChapter: (bookId: string, href: string) => invoke<string>("read_chapter", { bookId, href }),

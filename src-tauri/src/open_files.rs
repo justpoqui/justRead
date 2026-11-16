@@ -20,6 +20,25 @@ use tauri::{AppHandle, Emitter, Manager, Runtime, State, Url};
 #[derive(Default)]
 pub struct PendingOpen(pub Mutex<Vec<String>>);
 
+/// Files the *person* chose: "Open with", drag-and-drop, or the Import picker
+/// (opened by Rust). `import_books` only accepts these, so a compromised
+/// webview can't make the app import arbitrary files from the disk.
+#[derive(Default)]
+pub struct GrantedPaths(Mutex<std::collections::HashSet<String>>);
+
+/// Allow these paths/URIs to be imported (once each).
+pub fn grant<R: Runtime>(app: &AppHandle<R>, files: &[String]) {
+    if let Some(g) = app.try_state::<GrantedPaths>() {
+        g.0.lock().unwrap().extend(files.iter().cloned());
+    }
+}
+
+/// Was this path/URI chosen by the person? Consumes the grant.
+pub fn take_grant<R: Runtime>(app: &AppHandle<R>, file: &str) -> bool {
+    app.try_state::<GrantedPaths>()
+        .is_some_and(|g| g.0.lock().unwrap().remove(file))
+}
+
 /// Command-line arguments that name existing files (Windows/Linux "Open with").
 pub fn from_args(args: impl Iterator<Item = String>) -> Vec<String> {
     args.skip(1)
@@ -32,6 +51,7 @@ pub fn push<R: Runtime>(app: &AppHandle<R>, files: Vec<String>) {
     if files.is_empty() {
         return;
     }
+    grant(app, &files);
     app.state::<PendingOpen>().0.lock().unwrap().extend(files);
     let _ = app.emit_to("main", "open-files", ());
 }
