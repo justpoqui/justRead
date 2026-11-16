@@ -4,6 +4,8 @@
   import Library from "./views/Library.svelte";
   import Reader from "./views/Reader.svelte";
   import Stats from "./views/Stats.svelte";
+  import Profile from "./views/Profile.svelte";
+  import { loadProfile } from "./lib/profile.svelte";
   import Toasts from "./components/Toasts.svelte";
   import { settings, loadSettings } from "./lib/settings/store.svelte";
   import { themeColors } from "./lib/settings/reader-settings";
@@ -11,12 +13,13 @@
   import { autoCheck } from "./lib/updates.svelte";
 
   // STEP 1: a two-screen app — the library and the reader.
-  type Route = { name: "library" } | { name: "reader"; id: string } | { name: "stats" };
+  type Route = { name: "library" } | { name: "reader"; id: string } | { name: "stats" } | { name: "profile" };
   let route: Route = $state({ name: "library" });
   let ready = $state(false);
 
   onMount(async () => {
     await loadSettings();
+    await loadProfile();
     void installBackButton();
     void autoCheck(); // Android, about once a day, if enabled (Settings → Updates)
     ready = true;
@@ -38,7 +41,9 @@
 
 {#if ready}
   {#if route.name === "library"}
-    <Library onopen={(id) => (route = { name: "reader", id })} onstats={() => (route = { name: "stats" })} />
+    <Library onopen={(id) => (route = { name: "reader", id })} onstats={() => (route = { name: "stats" })} onprofile={() => (route = { name: "profile" })} />
+  {:else if route.name === "profile"}
+    <Profile onclose={() => (route = { name: "library" })} onstats={() => (route = { name: "stats" })} onopen={(id) => (route = { name: "reader", id })} />
   {:else if route.name === "stats"}
     <Stats onclose={() => (route = { name: "library" })} />
   {:else}

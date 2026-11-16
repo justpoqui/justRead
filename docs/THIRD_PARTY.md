@@ -23,8 +23,6 @@ Policy: MIT, BSD, Apache-2.0, ISC or zlib (see CONTRIBUTING.md). Enforced by `ca
 | uuid | Book ids | Apache-2.0 OR MIT |
 | lopdf | PDF metadata, page count, encryption check | MIT |
 | sevenz-rust2 | CB7 (7-Zip) comics | Apache-2.0 |
-| tokio | justBrowse proxy (already used by Tauri) | MIT |
-| webkit2gtk, gtk (Linux only) | justBrowse cookie policy and layout (already used by Tauri) | MIT |
 | tempfile (dev) | Tests | MIT OR Apache-2.0 |
 
 ## Rust — reviewed transitive exceptions (from Tauri)
@@ -74,11 +72,6 @@ used from the environment for end-to-end tests only.
 | Library | Used for | License |
 |---|---|---|
 | androidx.core (core-ktx) | `FileProvider` for sharing exports from our share plugin | Apache-2.0 |
-
-## Data
-
-`src-tauri/src/browse/blocklist.txt`: an original list of tracker/ad domains (Apache-2.0). Community
-lists (EasyList, AdGuard, Disconnect) were not used because of GPL/CC-BY-SA licensing.
 
 ## Fonts and artwork
 

@@ -133,8 +133,7 @@ Migrations are append-only SQL tracked with `PRAGMA user_version`.
   imports run on a blocking thread.
 * **Permissions**: commands are declared in `build.rs` (`AppManifest::commands`), which makes each
   one *deny-by-default*; `capabilities/main.json` grants the main window exactly what it needs.
-  No fs/shell/http/opener plugins are installed. This is the base for justBrowse's zero-permission
-  webview in Phase 5. (<https://v2.tauri.app/security/capabilities/>)
+  No fs/shell/http/opener plugins are installed. (<https://v2.tauri.app/security/capabilities/>)
 * **CSP** in `tauri.conf.json`: scripts only from the app; images/styles/fonts additionally from
   `justbook:`; no objects, no form actions.
 * **`justbook://` protocol** (`protocol.rs`): `/<uuid>/<package path>` → file bytes. UUID-validated,
@@ -147,20 +146,14 @@ Migrations are append-only SQL tracked with `PRAGMA user_version`.
 * **Size limits on webview input**: settings values and annotation quotes/notes are capped
   (256 KB), on top of the per-command validation in the library crate.
 
-## justBrowse (`src-tauri/src/browse`, `ui/src/browse`)
+## Profile (`ui/src/views/Profile.svelte`, `ui/src/lib/profile.svelte.ts`)
 
-A separate window with two webviews: the **toolbar** (`browse.html`, our page; capability
-`capabilities/browse.json` grants only `browse_*` commands) and the **content** (remote pages; in no
-capability, so zero IPC; incognito; autofill off; third-party cookies refused). All content traffic
-goes through a local **proxy** (`proxy.rs`) that applies the tracker/ad blocklist (`blocklist.txt`,
-original list) to every request, tunnels HTTPS without decryption, refuses plain HTTP unless the
-user accepted the warning for that host, and refuses local destinations after DNS resolution:
-this machine (loopback, link-local) always, and the **home network** (RFC 1918, carrier-grade NAT,
-IPv6 unique-local and link-local, IPv4 inside IPv6) unless the person allowed that host, so web
-pages can't reach routers, printers or NAS boxes.
-Navigation policy and address-bar parsing are pure functions in `policy.rs` (DuckDuckGo by default;
-any `https://…{q}` template such as SearXNG). Book downloads are imported and the reader's library
-refreshes via a `library-changed` event. Details and platform caveats: adr/0008-justbrowse.md.
+A local profile in the library header (where justBrowse's button used to be): a name, an avatar
+(initials or one of a few emoji, on a chosen color), a yearly books goal and a daily reading goal,
+with progress taken from the reading stats, plus a summary and the recently finished books. Stored
+in the settings table (key `profile`), sanitized on load; there are no accounts.
+
+justBrowse (Phase 5's built-in browser) was **removed**: see adr/0008-justbrowse.md.
 
 ## Mobile and "Open with" (Phase 6)
 
@@ -178,7 +171,6 @@ refreshes via a `library-changed` event. Details and platform caveats: adr/0008-
   `selectionchange`.
 * **Layout**: safe-area insets, compact header and bottom-sheet panels under 640px, larger touch
   targets on coarse pointers, edge arrows hidden on touch screens.
-* **justBrowse** is desktop-only for now (`#[cfg(desktop)]`); phones get a clear message.
 * **Builds**: `.github/workflows/mobile.yml` builds an Android debug APK and attempts an iOS simulator
   build. The Rust code is type-checked for `aarch64-linux-android`.
 
@@ -344,10 +336,10 @@ languages, and end-to-end runs in Chromium (mocked IPC) and in the real app on W
 | 2 | Two-page spread, highlights/notes/bookmarks, position persistence across layouts | ✅ done |
 | 3 | PDF (PDF.js) and comics (CBZ/CB7; CBR pending license decision) | ✅ done |
 | 4 | MOBI, AZW3, FB2, HTML, DOCX adapters; DjVu | ✅ done, except DjVu (decision pending, adr/0007) |
-| 5 | justBrowse (privacy-hardened browser) | ✅ done on desktop (mobile design in adr/0008) |
+| 5 | justBrowse (privacy-hardened browser) | removed (see adr/0008) |
 | 6 | Android and iOS | ✅ Android done; iOS builds in CI (device install pending) |
 | 7 | Highlight export (Markdown, to any app) | ✅ done |
-| 8 | Reading stats, shelves, collections, Continue reading | ✅ done |
+| 8 | Reading stats, shelves, collections, Continue reading, profile | ✅ done |
 
 ### Known limitations / follow-ups
 
@@ -358,8 +350,6 @@ languages, and end-to-end runs in Chromium (mocked IPC) and in the real app on W
 * MathML is unwrapped to text; audio/video are dropped.
 * PDFs: no text selection, highlights or search yet (bookmarks work); highlights need the PDF.js text
   layer (later). Annotations in fixed books are bookmarks only.
-* justBrowse: macOS < 14 has no proxy (no blocklist for sub-resources); Windows third-party cookie
-  behaviour unverified; blocklist is domain-level and modest; Tauri `unstable` API dependency.
 * HUFF/CDIC-compressed MOBI is covered by a synthetic test only (no real sample available offline). Its output is capped
   per record (256 KB) and per book (256 MB) against crafted self-referencing dictionaries.
 * DOCX: EMF/WMF images, text boxes, comments and tracked changes are not converted.

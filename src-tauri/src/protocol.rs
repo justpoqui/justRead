@@ -27,8 +27,8 @@ pub fn handle<R: Runtime>(
     request: Request<Vec<u8>>,
     responder: UriSchemeResponder,
 ) {
-    // STEP 0: only the reader may read book files — never justBrowse's web
-    // content (which could otherwise probe justbook:// URLs).
+    // STEP 0: only the reader's webview may read book files (defence in
+    // depth should any other webview ever exist).
     if ctx.webview_label() != "main" {
         responder.respond(
             Response::builder()

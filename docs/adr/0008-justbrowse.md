@@ -1,6 +1,7 @@
 # ADR 0008 — justBrowse architecture
 
-**Status:** accepted for desktop (Phase 5); mobile design deferred to Phase 6
+**Status:** withdrawn — justBrowse was removed from justRead at the owner's request (its place in the
+library header became the Profile page). Kept for the record of what was built and learned.
 
 ## Context
 justBrowse is a built-in browser for finding free books. Requirements: system webview per platform,

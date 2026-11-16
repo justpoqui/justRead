@@ -47,15 +47,7 @@ const COMMANDS: &[&str] = &[
     // In-app updates (Android)
     "check_update",
     "install_update",
-    // justBrowse (granted to the toolbar webview only, except open_browser)
     "take_pending_open",
-    "open_browser",
-    "browse_navigate",
-    "browse_history",
-    "browse_reload",
-    "browse_allow_http",
-    "browse_config",
-    "browse_set_search",
 ];
 
 fn main() {

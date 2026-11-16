@@ -40,7 +40,7 @@ Apple only installs signed apps, so iOS builds are made on a Mac with your Apple
 | Resume | Leave the app (home), come back; also force-close and reopen | Same position |
 | Notch | Look at the top and bottom edges | Nothing hidden under the notch or home bar |
 
-Known for now: **justBrowse is desktop-only** (phones show a message); DjVu and RAR comics (CBR)
+Known for now: DjVu and RAR comics (CBR)
 are not supported.
 
 ## Reporting a problem

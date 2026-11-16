@@ -8,15 +8,16 @@
   import BookCover from "../components/BookCover.svelte";
   import BookSheet from "../components/BookSheet.svelte";
   import UpdateBanner from "../components/UpdateBanner.svelte";
+  import Avatar from "../components/Avatar.svelte";
+  import { profile } from "../lib/profile.svelte";
   import { api } from "../lib/ipc/api";
   import type { BookSummary, Collection, ImportResult, SortKey } from "../lib/ipc/types";
   import { libraryPrefs, saveLibraryPrefs } from "../lib/settings/store.svelte";
   import { onBack } from "../lib/back";
   import { toast } from "../lib/stores/toasts.svelte";
   import { packageUrl } from "../lib/ipc/api";
-  import { isMobile } from "../lib/platform";
 
-  let { onopen, onstats }: { onopen: (id: string) => void; onstats: () => void } = $props();
+  let { onopen, onstats, onprofile }: { onopen: (id: string) => void; onstats: () => void; onprofile: () => void } = $props();
 
   let books: BookSummary[] = $state([]);
   let search = $state("");
@@ -172,7 +173,7 @@
       })
       .then((u) => (unlisten = u))
       .catch(() => {});
-    // Books downloaded in justBrowse are imported by Rust; refresh when that happens.
+    // Refresh when Rust changes the library (e.g. a file opened with "Open with").
     let unlistenLib: (() => void) | undefined;
     listen("library-changed", () => void refresh())
       .then((u) => (unlistenLib = u))
@@ -269,11 +270,9 @@
         <Icon name={libraryPrefs.view === "grid" ? "list" : "grid"} />
       </button>
       <button class="icon-btn" title="Reading stats" onclick={onstats}><Icon name="chart" /></button>
-      {#if !isMobile}
-        <button class="btn" title="Find free books online (justBrowse)" onclick={() => api.openBrowser().catch((e) => toast(String(e), "error"))}>
-          <Icon name="globe" size={16} /> Find books
-        </button>
-      {/if}
+      <button class="profile-btn" title="Profile" onclick={onprofile}>
+        <Avatar name={profile.name} emoji={profile.emoji} color={profile.color} size={32} />
+      </button>
       <button class="btn primary" onclick={pickFiles} disabled={importing}>
         <Icon name="plus" size={16} />
         {importing ? "Importing…" : "Import"}
@@ -576,6 +575,17 @@
   .coll-tools {
     display: flex;
     flex: none;
+  }
+  .profile-btn {
+    border: 0;
+    background: none;
+    padding: 2px;
+    border-radius: 50%;
+    cursor: pointer;
+    display: grid;
+  }
+  .profile-btn:focus-visible {
+    outline: 2px solid var(--accent);
   }
   .list {
     width: 100%;

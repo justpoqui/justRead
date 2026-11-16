@@ -24,26 +24,12 @@ justread-library.workspace = true
 justread-locator.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-# "unstable" enables multi-webview windows (Window::add_child) on desktop,
-# used by justBrowse (docs/adr/0008-justbrowse.md).
-tauri = { version = "2", features = ["unstable"] }  # Apache-2.0 OR MIT
+tauri = { version = "2" }                         # Apache-2.0 OR MIT
 tauri-plugin-dialog = "2"                         # Apache-2.0 OR MIT
 # Reads files the OS hands us as URIs (Android content://, iOS security-scoped).
 tauri-plugin-fs = "2"                             # Apache-2.0 OR MIT
 # Our own: Android share sheet (Phase 7) and reader screen control.
 tauri-plugin-justdevice.workspace = true
-# Already in the dependency tree via Tauri; used directly by the justBrowse proxy.
-tokio = { version = "1", features = ["net", "io-util", "time", "rt", "sync", "macros"] } # MIT
-
-[target.'cfg(target_os = "linux")'.dependencies]
-# Already in the tree via Tauri/wry; used to set justBrowse's cookie policy explicitly.
-webkit2gtk = "2"                                  # MIT
-# Also already in the tree; used to lay out justBrowse's two webviews in GTK's box.
-gtk = "0.18"                                      # MIT
-
-[target.'cfg(target_os = "macos")'.dependencies]
-# Proxy support for WKWebView (macOS 14+), needed for the justBrowse blocklist.
-tauri = { version = "2", features = ["unstable", "macos-proxy"] }
 
 [dev-dependencies]
 tempfile.workspace = true

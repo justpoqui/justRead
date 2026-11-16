@@ -5,7 +5,6 @@
 //! `justbook`, `justread-formats` and `justread-library` crates; this crate
 //! only wires them to the webview (commands + the `justbook://` protocol).
 
-mod browse;
 mod commands;
 mod export;
 mod open_files;
@@ -48,7 +47,6 @@ pub fn run() {
                 open_files::grant(window.app_handle(), &files);
             }
         })
-        .manage(browse::BrowseState::default())
         .manage(updater::PendingUpdate::default())
         // STEP 2: serve book packages to the reader iframe.
         .register_asynchronous_uri_scheme_protocol(protocol::SCHEME, protocol::handle)
@@ -94,13 +92,6 @@ pub fn run() {
             screen::set_screen,
             updater::check_update,
             updater::install_update,
-            browse::open_browser,
-            browse::browse_navigate,
-            browse::browse_history,
-            browse::browse_reload,
-            browse::browse_allow_http,
-            browse::browse_config,
-            browse::browse_set_search,
             open_files::take_pending_open,
         ])
         .build(tauri::generate_context!())

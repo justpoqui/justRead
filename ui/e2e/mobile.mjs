@@ -93,7 +93,7 @@ try {
   const lay = await page.evaluate(() => ({ overflow: document.documentElement.scrollWidth - window.innerWidth, width: window.innerWidth }));
   check(lay.width === vp.width, "phone viewport is in effect (no 980px desktop fallback)", `${lay.width}px`);
   check(lay.overflow <= 0, "library fits the phone width (no sideways scrolling)", `overflow ${lay.overflow}px`);
-  check((await page.locator("text=Find books").count()) === 0, "justBrowse button hidden on phones (desktop-only for now)");
+  check((await page.locator('button[title="Profile"]').count()) === 1, "Profile button in the library header");
   await page.screenshot({ path: join(shots, "m1-library.png") });
 
   // STEP 3b: the daily update check shows a banner; Update downloads and opens the installer.

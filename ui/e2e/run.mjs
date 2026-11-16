@@ -522,6 +522,27 @@ try {
   await page.screenshot({ path: join(shots, "14-library-shelves.png") });
   await page.locator(".chips button", { hasText: "All" }).click();
 
+  // STEP 32b: the profile — name, avatar, goals, summary (all local).
+  await page.locator('button[title="Profile"]').click();
+  await page.waitForSelector(".profile-view");
+  await page.locator(".who button", { hasText: "Edit" }).click();
+  await page.locator('input[placeholder="Your name"]').fill("Ada Lovelace");
+  await page.locator('input[placeholder="Your name"]').dispatchEvent("change");
+  await page.locator('.emoji button[role="radio"]', { hasText: "🦉" }).click();
+  await page.locator('input[aria-label="Books to finish this year"]').fill("12");
+  await page.locator('input[aria-label="Books to finish this year"]').dispatchEvent("change");
+  await page.locator('select[aria-label="Minutes to read each day"]').selectOption("20");
+  await settle(400);
+  const prof = await page.evaluate(() => window.__jr.settings.get("profile"));
+  const goal = await page.locator(".goal").first().innerText();
+  check(prof?.name === "Ada Lovelace" && prof?.emoji === "🦉" && prof?.yearGoal === 12 && prof?.dailyGoal === 20 && /1 of 12/.test(goal),
+    "profile saves name, avatar and goals; yearly goal shows progress", JSON.stringify(prof) + " | " + goal.replace(/\n/g, " "));
+  check((await page.locator(".finished .fin").count()) >= 1, "profile lists recently finished books");
+  await page.screenshot({ path: join(shots, "16-profile.png") });
+  await page.locator('button[title="Back to library"]').click();
+  await page.waitForSelector(".card");
+  check((await page.locator('button[title="Profile"]').innerText()).includes("🦉"), "library header shows the avatar");
+
   // STEP 33: the stats screen.
   await page.locator('button[title="Reading stats"]').click();
   await page.waitForSelector(".tiles");

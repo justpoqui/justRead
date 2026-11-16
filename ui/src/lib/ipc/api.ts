@@ -61,7 +61,6 @@ export const api = {
   // In-app updates (Android): GitHub Releases of the justRead repository.
   checkUpdate: () => invoke<UpdateInfo>("check_update"),
   installUpdate: () => invoke<void>("install_update"),
-  openBrowser: () => invoke<void>("open_browser"),
   takePendingOpen: () => invoke<string[]>("take_pending_open"),
   // Bytes travel as a number array; covers are small (~30 KB JPEG).
   setCover: (bookId: string, bytes: Uint8Array) => invoke<string>("set_cover", { bookId, bytes: Array.from(bytes) }),

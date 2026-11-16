@@ -77,7 +77,7 @@ install over the app from inside it: Settings → Updates, or the banner in the 
 
 ## Notes
 
-* Releases are published only from `main` and the current development branch; other branches
+* Releases are published only from `main`; other branches
   still build (as a downloadable artifact) without publishing.
 * The first time you update from inside the app, Android asks you to allow justRead to install
   apps; justRead opens that settings page for you, then tap Update again.

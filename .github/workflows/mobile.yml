@@ -127,9 +127,9 @@ jobs:
           name: justread-android
           path: justRead.apk
           if-no-files-found: error
-      # Published from the development branches only (not every feature branch).
+      # Published from main only; other branches just build (as a downloadable artifact).
       - name: Publish the GitHub Release (the in-app updater reads the latest one)
-        if: env.HAS_KEY == 'true' && (github.ref_name == 'main' || github.ref_name == 'ccr-bc429417-7g7n6y')
+        if: env.HAS_KEY == 'true' && github.ref_name == 'main'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
