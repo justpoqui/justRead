@@ -208,8 +208,10 @@ fn metadata(doc: &Document, src: &Path) -> Metadata {
 pub fn decode_text_string(b: &[u8]) -> String {
     if let Some(rest) = b.strip_prefix(&[0xFE, 0xFF]) {
         let units: Vec<u16> = rest
-            .chunks_exact(2)
-            .map(|c| u16::from_be_bytes([c[0], c[1]]))
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .map(|&c| u16::from_be_bytes(c))
             .collect();
         return String::from_utf16_lossy(&units);
     }

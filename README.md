@@ -27,7 +27,7 @@ An open-source, cross-platform ebook reader: part of the **just** suite.
 
 ## Building
 
-Prerequisites: [Rust](https://rustup.rs) ≥ 1.80, Node.js ≥ 20 with [pnpm](https://pnpm.io), and the
+Prerequisites: [Rust](https://rustup.rs) ≥ 1.88, Node.js ≥ 20 with [pnpm](https://pnpm.io), and the
 [Tauri v2 system dependencies](https://v2.tauri.app/start/prerequisites/) for your OS
 (on Debian/Ubuntu: `libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev`).
 

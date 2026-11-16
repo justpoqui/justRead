@@ -18,7 +18,7 @@ edition = "2021"
 license = "Apache-2.0"
 authors = ["The justRead Authors"]
 repository = "https://github.com/justpoqui/justRead"
-rust-version = "1.80"
+rust-version = "1.88"
 
 [workspace.dependencies]
 # Internal crates
